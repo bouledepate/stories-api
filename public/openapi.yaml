@@ -1,0 +1,480 @@
+openapi: 3.1.0
+info:
+  title: Stories API
+  version: 0.2.0
+  description: |
+    HTTP API for Stories (Love Letter-inspired) built with PHP + Slim v4.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags: [System]
+      security: []
+      summary: Health check
+      responses:
+        '200':
+          description: Service status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Register a user and issue token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Validation/domain error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Login and issue token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get profile and stats of current user
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /rooms:
+    post:
+      tags: [Rooms]
+      summary: Create room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoomRequest'
+      responses:
+        '201':
+          description: Room snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomSnapshot'
+        '400':
+          description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /rooms/{roomId}/join:
+    post:
+      tags: [Rooms]
+      summary: Join room as player or spectator
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+        - name: spectator
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Room snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomSnapshot'
+
+  /rooms/{roomId}/leave:
+    post:
+      tags: [Rooms]
+      summary: Leave room
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      responses:
+        '200':
+          description: Leave status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: left
+                  roomId:
+                    type: string
+
+  /rooms/{roomId}/ready:
+    post:
+      tags: [Rooms]
+      summary: Set ready status
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadyRequest'
+      responses:
+        '200':
+          description: Room snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomSnapshot'
+
+  /rooms/{roomId}/start:
+    post:
+      tags: [Rooms]
+      summary: Start game (owner only)
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      responses:
+        '200':
+          description: Room snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomSnapshot'
+
+  /rooms/{roomId}:
+    get:
+      tags: [Rooms]
+      summary: Get current room state
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      responses:
+        '200':
+          description: Room snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomSnapshot'
+
+  /rooms/{roomId}/actions:
+    post:
+      tags: [Rooms]
+      summary: Submit game action
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitActionRequest'
+      responses:
+        '200':
+          description: Action result and updated state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    additionalProperties: true
+                  state:
+                    $ref: '#/components/schemas/RoomSnapshot'
+
+  /admin/cards:
+    get:
+      tags: [Admin]
+      summary: List cards in deck
+      parameters:
+        - name: deck
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [character, decree, event]
+      responses:
+        '200':
+          description: Deck cards
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deck:
+                    type: string
+                  cards:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Card'
+
+  /admin/cards/{deck}/{cardCode}:
+    patch:
+      tags: [Admin]
+      summary: Patch card and bump version
+      parameters:
+        - name: deck
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [character, decree, event]
+        - name: cardCode
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchCardRequest'
+      responses:
+        '200':
+          description: Updated card
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: updated
+                  card:
+                    $ref: '#/components/schemas/Card'
+
+  /admin/effects:
+    get:
+      tags: [Admin]
+      summary: List available effect keys
+      responses:
+        '200':
+          description: Effect key list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  effects:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        deck:
+                          type: string
+                        code:
+                          type: string
+                        effectKey:
+                          type: string
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Token
+
+  parameters:
+    RoomId:
+      name: roomId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+        password:
+          type: string
+          minLength: 6
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    TokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: bearer
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+
+    CreateRoomRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 64
+
+    ReadyRequest:
+      type: object
+      required: [ready]
+      properties:
+        ready:
+          type: boolean
+
+    SubmitActionRequest:
+      type: object
+      required: [actionType]
+      properties:
+        actionType:
+          type: string
+          enum: [draw_character, play_character, pass_turn]
+        cardCode:
+          type: string
+          nullable: true
+
+    Card:
+      type: object
+      additionalProperties: true
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        text:
+          type: string
+        value:
+          type: integer
+        effectKey:
+          type: string
+        enabled:
+          type: boolean
+        version:
+          type: integer
+
+    Participant:
+      type: object
+      properties:
+        userId:
+          type: string
+        username:
+          type: string
+        role:
+          type: string
+          enum: [owner, player, spectator]
+        ready:
+          type: boolean
+
+    RoomSnapshot:
+      type: object
+      properties:
+        roomId:
+          type: string
+        name:
+          type: string
+        ownerId:
+          type: string
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Participant'
+        game:
+          type: object
+          nullable: true
+          additionalProperties: true
+
+    MeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        role:
+          type: string
+        wins:
+          type: integer
+        losses:
+          type: integer
+        victoryTokens:
+          type: integer
+        eliminatedWith3:
+          type: integer
+
+    PatchCardRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        value:
+          type: integer
+        text:
+          type: string
+        enabled:
+          type: boolean
+        effectKey:
+          type: string

@@ -29,6 +29,11 @@ composer serve
 
 Server starts at `http://localhost:8080`.
 
+## API documentation
+
+- OpenAPI spec: `GET /openapi.yaml`
+- Swagger UI: `GET /docs/`
+
 ## Key endpoints
 
 - `GET /health`
