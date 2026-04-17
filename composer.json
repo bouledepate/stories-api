@@ -1,0 +1,18 @@
+{
+  "name": "stories/api",
+  "description": "Stories board game API on PHP + Slim",
+  "type": "project",
+  "require": {
+    "php": ">=8.3",
+    "slim/slim": "^4.14",
+    "slim/psr7": "^1.7"
+  },
+  "autoload": {
+    "psr-4": {
+      "Stories\\": "src/"
+    }
+  },
+  "scripts": {
+    "serve": "php -S 0.0.0.0:8080 -t public"
+  }
+}
