@@ -6,8 +6,9 @@ Vertical Slice backend scaffold for a turn-based board game API.
 
 - PHP 8.5-ready codebase (composer constraint: `>=8.3`)
 - Slim v4
+- Doctrine DBAL
+- SQLite file database (`var/data.sqlite` by default)
 - Bearer token auth (HMAC-signed token service)
-- In-memory data store for MVP speed
 
 ## Architecture
 
@@ -16,7 +17,7 @@ This project uses **Vertical Slice Architecture**:
 - `src/Slices/Auth` — registration, login, me
 - `src/Slices/Rooms` — room lifecycle + round actions
 - `src/Slices/Admin` — card management endpoints
-- `src/Shared` — shared cross-slice concerns only (JWT, responder, store)
+- `src/Shared` — shared cross-slice concerns only (DB connection, auth, responder)
 
 Each slice contains `Action` + `Dto` + `Service`.
 
@@ -24,6 +25,7 @@ Each slice contains `Action` + `Dto` + `Service`.
 
 ```bash
 composer install
+composer migrate
 composer serve
 ```
 
@@ -53,10 +55,13 @@ Server starts at `http://localhost:8080`.
 
 ## Environment
 
+- `DB_PATH` (default: `var/data.sqlite`)
 - `JWT_SECRET` (default: `change-me`)
 - `DISCONNECT_GRACE_SECONDS` (default: `30`)
 
-## Notes
+## Migrations
 
-- SOLID/DRY/YAGNI: minimal abstractions, slice-local logic, shared concerns only where needed.
-- WebSocket intentionally omitted in this iteration to keep MVP focused on core HTTP game loop; realtime transport can be added as a dedicated slice (`Realtime`) without changing current domain services.
+- SQL files are in `migrations/`
+- Runner script: `bin/migrate.php`
+- Applied migrations are tracked in table `schema_migrations`
+

@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Stories\Slices\Rooms\Service;
 
+use Doctrine\DBAL\Connection;
 use RuntimeException;
-use Stories\Shared\Store\InMemoryStore;
 use Stories\Slices\Rooms\Dto\ActionRequest;
 use Stories\Slices\Rooms\Dto\CreateRoomRequest;
 
 final class RoomService
 {
     public function __construct(
-        private readonly InMemoryStore $store,
+        private readonly Connection $db,
         private readonly int $disconnectGraceSeconds = 30
     ) {
     }
@@ -22,20 +22,21 @@ final class RoomService
     public function create(CreateRoomRequest $request, array $actor): array
     {
         $roomId = $this->uuid();
-        $this->store->rooms[$roomId] = [
-            'roomId' => $roomId,
+        $this->db->insert('rooms', [
+            'id' => $roomId,
             'name' => $request->name,
-            'ownerId' => $actor['sub'],
-            'participants' => [
-                $actor['sub'] => [
-                    'userId' => $actor['sub'],
-                    'username' => $actor['username'],
-                    'role' => 'owner',
-                    'ready' => false,
-                ],
-            ],
-            'game' => null,
-        ];
+            'owner_user_id' => (string) $actor['sub'],
+            'status' => 'lobby',
+            'created_at' => gmdate(DATE_ATOM),
+        ]);
+
+        $this->db->insert('room_participants', [
+            'room_id' => $roomId,
+            'user_id' => (string) $actor['sub'],
+            'role' => 'owner',
+            'ready' => 0,
+            'joined_at' => gmdate(DATE_ATOM),
+        ]);
 
         return $this->snapshot($roomId, (string) $actor['sub']);
     }
@@ -44,14 +45,15 @@ final class RoomService
     /** @return array<string, mixed> */
     public function join(string $roomId, array $actor, bool $spectator): array
     {
-        $room = &$this->requireRoom($roomId);
+        $this->requireRoom($roomId);
+
         $role = $spectator ? 'spectator' : 'player';
-        $room['participants'][(string) $actor['sub']] = [
-            'userId' => $actor['sub'],
-            'username' => $actor['username'],
-            'role' => $role,
-            'ready' => false,
-        ];
+        $this->db->executeStatement(
+            'INSERT INTO room_participants(room_id, user_id, role, ready, joined_at)
+             VALUES (?, ?, ?, 0, ?)
+             ON CONFLICT(room_id, user_id) DO UPDATE SET role = excluded.role',
+            [$roomId, (string) $actor['sub'], $role, gmdate(DATE_ATOM)]
+        );
 
         return $this->snapshot($roomId, (string) $actor['sub']);
     }
@@ -59,21 +61,23 @@ final class RoomService
     /** @param array<string, mixed> $actor */
     public function leave(string $roomId, array $actor): void
     {
-        $room = &$this->requireRoom($roomId);
-        unset($room['participants'][(string) $actor['sub']]);
+        $this->db->delete('room_participants', ['room_id' => $roomId, 'user_id' => (string) $actor['sub']]);
     }
 
     /** @param array<string, mixed> $actor */
     /** @return array<string, mixed> */
     public function ready(string $roomId, array $actor, bool $ready): array
     {
-        $room = &$this->requireRoom($roomId);
-        $participant = &$room['participants'][(string) $actor['sub']];
-        if ($participant === null) {
+        $exists = $this->db->fetchOne(
+            'SELECT 1 FROM room_participants WHERE room_id = ? AND user_id = ?',
+            [$roomId, (string) $actor['sub']]
+        );
+
+        if ($exists === false) {
             throw new RuntimeException('User is not in room');
         }
 
-        $participant['ready'] = $ready;
+        $this->db->update('room_participants', ['ready' => $ready ? 1 : 0], ['room_id' => $roomId, 'user_id' => (string) $actor['sub']]);
 
         return $this->snapshot($roomId, (string) $actor['sub']);
     }
@@ -82,31 +86,37 @@ final class RoomService
     /** @return array<string, mixed> */
     public function start(string $roomId, array $actor): array
     {
-        $room = &$this->requireRoom($roomId);
-        if ($room['ownerId'] !== $actor['sub']) {
+        $room = $this->requireRoom($roomId);
+        if ($room['owner_user_id'] !== $actor['sub']) {
             throw new RuntimeException('Only owner can start game');
         }
 
-        $readyPlayers = [];
-        foreach ($room['participants'] as $participant) {
-            if (in_array($participant['role'], ['owner', 'player'], true) && $participant['ready'] === true) {
-                $readyPlayers[] = $participant;
-            }
-        }
+        $readyPlayers = $this->db->fetchAllAssociative(
+            "SELECT user_id FROM room_participants WHERE room_id = ? AND role IN ('owner','player') AND ready = 1 ORDER BY joined_at",
+            [$roomId]
+        );
 
         if (count($readyPlayers) < 2) {
             throw new RuntimeException('Need at least 2 ready players');
         }
 
-        $playerIds = array_map(static fn (array $item): string => (string) $item['userId'], $readyPlayers);
-        $room['game'] = [
-            'gameId' => $this->uuid(),
-            'status' => 'in_progress',
+        $playerIds = array_map(static fn (array $row): string => (string) $row['user_id'], $readyPlayers);
+        $state = [
             'decreeRoundsUsed' => 0,
             'disconnectDeadlines' => [],
             'scoreboard' => array_fill_keys($playerIds, 0),
             'round' => $this->buildRound($playerIds, $playerIds[0], 0),
         ];
+
+        $gameId = $this->uuid();
+        $this->db->executeStatement(
+            'INSERT INTO games(id, room_id, status, decree_rounds_used, state_json, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT(room_id) DO UPDATE SET id=excluded.id, status=excluded.status, decree_rounds_used=excluded.decree_rounds_used, state_json=excluded.state_json',
+            [$gameId, $roomId, 'in_progress', 0, json_encode($state, JSON_UNESCAPED_UNICODE), gmdate(DATE_ATOM)]
+        );
+
+        $this->db->update('rooms', ['status' => 'in_game'], ['id' => $roomId]);
 
         return $this->snapshot($roomId, (string) $actor['sub']);
     }
@@ -115,13 +125,10 @@ final class RoomService
     /** @return array<string, mixed> */
     public function action(string $roomId, array $actor, ActionRequest $request): array
     {
-        $room = &$this->requireRoom($roomId);
-        if (!is_array($room['game']) || !is_array($room['game']['round'])) {
-            throw new RuntimeException('Game not started');
-        }
+        $game = $this->requireGame($roomId);
+        $state = $this->decodeState($game['state_json']);
+        $round = &$state['round'];
 
-        /** @var array<string, mixed> $round */
-        $round = &$room['game']['round'];
         $currentPlayerId = $round['turnOrder'][$round['currentTurnIndex']];
         if ($currentPlayerId !== $actor['sub']) {
             throw new RuntimeException('Not your turn');
@@ -135,6 +142,7 @@ final class RoomService
 
             $card = array_shift($round['characterDeck']);
             $hand[] = $card;
+            $this->persistState((string) $game['id'], $state);
 
             return ['result' => 'drawn', 'handSize' => count($hand)];
         }
@@ -147,11 +155,13 @@ final class RoomService
             $played = $this->removeCardFromHand($hand, $request->cardCode);
             $round['discardPile'][] = $played;
             $this->moveToNextAlive($round);
+            $this->persistState((string) $game['id'], $state);
 
             return ['result' => 'played', 'card' => $played, 'nextPlayerId' => $round['turnOrder'][$round['currentTurnIndex']]];
         }
 
         $this->moveToNextAlive($round);
+        $this->persistState((string) $game['id'], $state);
 
         return ['result' => 'passed', 'nextPlayerId' => $round['turnOrder'][$round['currentTurnIndex']]];
     }
@@ -166,61 +176,81 @@ final class RoomService
 
     public function markDisconnected(string $roomId, string $userId): void
     {
-        $room = &$this->requireRoom($roomId);
-        if ($room['game'] === null) {
-            return;
-        }
-
-        $room['game']['disconnectDeadlines'][$userId] = time() + $this->disconnectGraceSeconds;
+        $game = $this->requireGame($roomId);
+        $state = $this->decodeState($game['state_json']);
+        $state['disconnectDeadlines'][$userId] = time() + $this->disconnectGraceSeconds;
+        $this->persistState((string) $game['id'], $state);
     }
 
     private function resolveDisconnectTimeouts(string $roomId): void
     {
-        $room = &$this->requireRoom($roomId);
-        if (!is_array($room['game']) || !is_array($room['game']['round'])) {
+        $game = $this->findGame($roomId);
+        if ($game === false) {
             return;
         }
 
+        $state = $this->decodeState($game['state_json']);
         $now = time();
-        foreach ($room['game']['disconnectDeadlines'] as $userId => $deadline) {
+        $changed = false;
+        foreach ($state['disconnectDeadlines'] as $userId => $deadline) {
             if ($now < $deadline) {
                 continue;
             }
 
-            $round = &$room['game']['round'];
-            $round['alivePlayers'] = array_values(array_filter(
-                $round['alivePlayers'],
+            $state['round']['alivePlayers'] = array_values(array_filter(
+                $state['round']['alivePlayers'],
                 static fn (string $aliveId): bool => $aliveId !== $userId
             ));
 
-            if (isset($round['hands'][$userId])) {
-                foreach ($round['hands'][$userId] as $card) {
-                    $round['discardPile'][] = $card;
+            if (isset($state['round']['hands'][$userId])) {
+                foreach ($state['round']['hands'][$userId] as $card) {
+                    $state['round']['discardPile'][] = $card;
                 }
-                $round['hands'][$userId] = [];
+                $state['round']['hands'][$userId] = [];
             }
 
-            unset($room['game']['disconnectDeadlines'][$userId]);
+            unset($state['disconnectDeadlines'][$userId]);
+            $changed = true;
+        }
+
+        if ($changed) {
+            $this->persistState((string) $game['id'], $state);
         }
     }
 
-    /** @param array<string, mixed> $room */
     /** @return array<string, mixed> */
     private function snapshot(string $roomId, ?string $requesterId): array
     {
         $room = $this->requireRoom($roomId);
+        $participants = $this->db->fetchAllAssociative(
+            'SELECT p.user_id, u.username, p.role, p.ready
+             FROM room_participants p JOIN users u ON u.id = p.user_id
+             WHERE p.room_id = ? ORDER BY p.joined_at',
+            [$roomId]
+        );
+
         $snapshot = [
-            'roomId' => $room['roomId'],
+            'roomId' => $room['id'],
             'name' => $room['name'],
-            'ownerId' => $room['ownerId'],
-            'participants' => array_values($room['participants']),
+            'ownerId' => $room['owner_user_id'],
+            'participants' => array_map(
+                static fn (array $row): array => [
+                    'userId' => $row['user_id'],
+                    'username' => $row['username'],
+                    'role' => $row['role'],
+                    'ready' => ((int) $row['ready']) === 1,
+                ],
+                $participants
+            ),
         ];
 
-        if (is_array($room['game']) && is_array($room['game']['round'])) {
-            $round = $room['game']['round'];
+        $game = $this->findGame($roomId);
+        if ($game !== false) {
+            $state = $this->decodeState($game['state_json']);
+            $round = $state['round'];
             $snapshot['game'] = [
-                'gameId' => $room['game']['gameId'],
-                'status' => $room['game']['status'],
+                'gameId' => $game['id'],
+                'status' => $game['status'],
                 'publicState' => [
                     'activeDecree' => $round['activeDecree'],
                     'alivePlayers' => $round['alivePlayers'],
@@ -256,10 +286,8 @@ final class RoomService
             if ($card['code'] !== $cardCode) {
                 continue;
             }
-
             unset($hand[$idx]);
             $hand = array_values($hand);
-
             return $card;
         }
 
@@ -270,17 +298,12 @@ final class RoomService
     /** @return array<string, mixed> */
     private function buildRound(array $players, string $firstPlayerId, int $decreeRoundsUsed): array
     {
-        $characterDeck = array_values(array_filter(
-            $this->store->cards['character'],
-            static fn (array $card): bool => $card['enabled'] === true && $card['code'] !== 'shadow'
-        ));
-        shuffle($characterDeck);
-
-        $decrees = array_values(array_filter(
-            $this->store->cards['decree'],
-            static fn (array $card): bool => $card['enabled'] === true
-        ));
-        shuffle($decrees);
+        $characterDeck = $this->db->fetchAllAssociative(
+            "SELECT code, name, value, text FROM cards WHERE deck='character' AND enabled=1 AND code <> 'shadow' ORDER BY RANDOM()"
+        );
+        $decrees = $this->db->fetchAllAssociative(
+            "SELECT code, name, text, effect_key FROM cards WHERE deck='decree' AND enabled=1 ORDER BY RANDOM()"
+        );
 
         $hiddenCard = array_shift($characterDeck);
         $hands = [];
@@ -313,13 +336,42 @@ final class RoomService
     }
 
     /** @return array<string, mixed> */
-    private function &requireRoom(string $roomId): array
+    private function requireRoom(string $roomId): array
     {
-        if (!isset($this->store->rooms[$roomId])) {
+        $room = $this->db->fetchAssociative('SELECT id, name, owner_user_id, status FROM rooms WHERE id = ?', [$roomId]);
+        if ($room === false) {
             throw new RuntimeException('Room not found');
         }
+        return $room;
+    }
 
-        return $this->store->rooms[$roomId];
+    /** @return array<string, mixed> */
+    private function requireGame(string $roomId): array
+    {
+        $game = $this->findGame($roomId);
+        if ($game === false) {
+            throw new RuntimeException('Game not started');
+        }
+        return $game;
+    }
+
+    private function findGame(string $roomId): array|false
+    {
+        return $this->db->fetchAssociative('SELECT id, room_id, status, decree_rounds_used, state_json FROM games WHERE room_id = ?', [$roomId]);
+    }
+
+    /** @param array<string, mixed> $state */
+    private function persistState(string $gameId, array $state): void
+    {
+        $this->db->update('games', ['state_json' => json_encode($state, JSON_UNESCAPED_UNICODE)], ['id' => $gameId]);
+    }
+
+    /** @return array<string, mixed> */
+    private function decodeState(string $json): array
+    {
+        /** @var array<string, mixed> $state */
+        $state = (array) json_decode($json, true);
+        return $state;
     }
 
     private function uuid(): string

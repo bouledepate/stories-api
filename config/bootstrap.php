@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
+use Stories\Shared\Database\ConnectionFactory;
 use Stories\Shared\Http\JsonResponder;
 use Stories\Shared\Security\AuthContext;
 use Stories\Shared\Security\JwtService;
-use Stories\Shared\Store\InMemoryStore;
 use Stories\Slices\Admin\Action\ListCardsAction;
 use Stories\Slices\Admin\Action\ListEffectsAction;
 use Stories\Slices\Admin\Action\PatchCardAction;
@@ -23,14 +23,20 @@ use Stories\Slices\Rooms\Action\StartGameAction;
 use Stories\Slices\Rooms\Action\SubmitAction;
 use Stories\Slices\Rooms\Service\RoomService;
 
-$store = new InMemoryStore();
+$dbPath = (string) ($_ENV['DB_PATH'] ?? (__DIR__ . '/../var/data.sqlite'));
+$dir = dirname($dbPath);
+if (!is_dir($dir)) {
+    mkdir($dir, 0777, true);
+}
+
+$db = ConnectionFactory::create($dbPath);
 $responder = new JsonResponder();
 $jwt = new JwtService((string) ($_ENV['JWT_SECRET'] ?? 'change-me'));
 $authContext = new AuthContext($jwt);
 
-$authService = new AuthService($store, $jwt);
-$roomService = new RoomService($store, (int) ($_ENV['DISCONNECT_GRACE_SECONDS'] ?? 30));
-$adminService = new AdminService($store);
+$authService = new AuthService($db, $jwt);
+$roomService = new RoomService($db, (int) ($_ENV['DISCONNECT_GRACE_SECONDS'] ?? 30));
+$adminService = new AdminService($db);
 
 return [
     'registerAction' => new RegisterAction($authService, $responder),
