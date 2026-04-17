@@ -1,0 +1,12 @@
+version: '3.9'
+services:
+  api:
+    build: .
+    ports:
+      - '8080:8080'
+    environment:
+      DB_PATH: /app/var/data.sqlite
+      JWT_SECRET: change-me
+      DISCONNECT_GRACE_SECONDS: 30
+    volumes:
+      - ./var:/app/var
