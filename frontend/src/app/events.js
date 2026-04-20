@@ -24,6 +24,18 @@ const openAuth = (render, mode = 'login') => {
   render();
 };
 
+const openRoomModal = (render, mode = 'create') => {
+  state.roomModalOpen = true;
+  state.roomModalMode = mode;
+  state.homeStatusMessage = '';
+  render();
+};
+
+const closeRoomModal = (render) => {
+  state.roomModalOpen = false;
+  render();
+};
+
 export const bindCommonEvents = (render) => {
   document.querySelectorAll('[data-tab]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -40,24 +52,16 @@ export const bindCommonEvents = (render) => {
     });
   });
 
-  document.querySelectorAll('[data-theme]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      state.theme = btn.dataset.theme;
-      localStorage.setItem('stories_theme', state.theme);
-      render();
-    });
-  });
-
   document.querySelector('[data-act="toggleAuth"]')?.addEventListener('click', () => openAuth(render, 'login'));
 
   document.querySelector('[data-act="heroCreate"]')?.addEventListener('click', () => {
     if (!state.user) return openAuth(render, 'login');
-    document.querySelector('#roomName')?.focus();
+    openRoomModal(render, 'create');
   });
 
   document.querySelector('[data-act="heroJoin"]')?.addEventListener('click', () => {
     if (!state.user) return openAuth(render, 'login');
-    document.querySelector('#inviteCode')?.focus();
+    openRoomModal(render, 'join');
   });
 
   document.querySelectorAll('[data-act="closeAuth"]').forEach((node) => {
@@ -74,6 +78,10 @@ export const bindCommonEvents = (render) => {
     state.authOpen = false;
     localStorage.removeItem('stories_token');
     render();
+  });
+
+  document.querySelectorAll('[data-act="closeRoomModal"]').forEach((node) => {
+    node.addEventListener('click', () => closeRoomModal(render));
   });
 };
 
@@ -121,17 +129,23 @@ export const bindHomeEvents = (render) => {
     if (!state.user) return openAuth(render, 'login');
 
     try {
+      const password = safeTextValue('#roomPassword', 128);
+      const payload = {
+        name: safeTextValue('#roomName', 64),
+        isPublic: Boolean(document.querySelector('#roomIsPublic')?.checked),
+      };
+      if (password !== '') payload.password = password;
+
       state.activeRoom = await callApi('/rooms', {
         method: 'POST',
-        body: JSON.stringify({
-          name: safeTextValue('#roomName', 64),
-          isPublic: Boolean(document.querySelector('#roomIsPublic')?.checked),
-          password: safeTextValue('#roomPassword', 128),
-        }),
+        body: JSON.stringify(payload),
       });
-      setStatus('homeStatus', `${t('roomCreated')} ${state.activeRoom.inviteCode}`, true);
+      state.roomModalOpen = false;
+      state.activeTab = 'home';
+      state.homeStatusMessage = `${t('roomCreated')} ${state.activeRoom.inviteCode}`;
       render();
     } catch (e) {
+      state.homeStatusMessage = e.message;
       setStatus('homeStatus', e.message);
     }
   });
@@ -140,17 +154,23 @@ export const bindHomeEvents = (render) => {
     if (!state.user) return openAuth(render, 'login');
 
     try {
+      const password = safeTextValue('#joinPassword', 128);
+      const payload = {
+        inviteCode: safeTextValue('#inviteCode', 6).toUpperCase(),
+        spectator: Boolean(document.querySelector('#joinAsSpectator')?.checked),
+      };
+      if (password !== '') payload.password = password;
+
       state.activeRoom = await callApi('/rooms/join-by-code', {
         method: 'POST',
-        body: JSON.stringify({
-          inviteCode: safeTextValue('#inviteCode', 6).toUpperCase(),
-          spectator: Boolean(document.querySelector('#joinAsSpectator')?.checked),
-          password: safeTextValue('#joinPassword', 128),
-        }),
+        body: JSON.stringify(payload),
       });
-      setStatus('homeStatus', `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
+      state.roomModalOpen = false;
+      state.activeTab = 'home';
+      state.homeStatusMessage = `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`;
       render();
     } catch (e) {
+      state.homeStatusMessage = e.message;
       setStatus('homeStatus', e.message);
     }
   });
@@ -213,11 +233,18 @@ export const bindHomeEvents = (render) => {
       if (!roomId) return;
 
       try {
-        const password = window.prompt(t('roomPassword')) || '';
-        state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}/join`, {
-          method: 'POST',
-          body: JSON.stringify({ spectator: false, password }),
-        });
+        const ownerUserId = btn.dataset.roomOwnerId || '';
+        if (state.user?.id && ownerUserId === state.user.id) {
+          state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}`);
+        } else {
+          const password = window.prompt(t('roomPassword')) || '';
+          const payload = { spectator: false };
+          if (password.trim() !== '') payload.password = password.trim();
+          state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}/join`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+        }
         state.activeTab = 'home';
         setStatus('homeStatus', `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
         render();
@@ -255,11 +282,18 @@ export const bindLobbyEvents = (render) => {
       if (!roomId) return;
 
       try {
-        const password = window.prompt(t('roomPassword')) || '';
-        state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}/join`, {
-          method: 'POST',
-          body: JSON.stringify({ spectator: false, password }),
-        });
+        const ownerUserId = btn.dataset.roomOwnerId || '';
+        if (state.user?.id && ownerUserId === state.user.id) {
+          state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}`);
+        } else {
+          const password = window.prompt(t('roomPassword')) || '';
+          const payload = { spectator: false };
+          if (password.trim() !== '') payload.password = password.trim();
+          state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}/join`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+        }
         state.activeTab = 'home';
         setStatus('homeStatus', `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
         render();
@@ -271,6 +305,20 @@ export const bindLobbyEvents = (render) => {
 };
 
 export const bindProfileEvents = (render) => {
+  document.querySelectorAll('[data-act="openOwnedRoom"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        const roomId = btn.dataset.roomId;
+        if (!roomId) return;
+        state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}`);
+        state.activeTab = 'home';
+        render();
+      } catch (e) {
+        setStatus('profileStatus', e.message);
+      }
+    });
+  });
+
   document.querySelector('[data-act="saveProfile"]')?.addEventListener('click', async () => {
     try {
       const username = safeTextValue('#profileUsername', 64);

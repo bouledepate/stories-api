@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stories\Shared\Http;
 
+use InvalidArgumentException;
 use Stories\Shared\Exception\ApiException;
 use Throwable;
 
@@ -43,6 +44,9 @@ enum ApiErrorCode: string
     {
         if ($throwable instanceof ApiException) {
             return $throwable->errorCode;
+        }
+        if ($throwable instanceof InvalidArgumentException) {
+            return self::VALIDATION_ERROR;
         }
 
         return self::UNKNOWN_ERROR;

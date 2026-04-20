@@ -17,6 +17,7 @@ const mapErrorCode = (code, status) => {
     ROOM_PASSWORD_INVALID: 'roomPasswordInvalid',
     CURRENT_PASSWORD_INVALID: 'currentPasswordInvalid',
     VALIDATION_ERROR: 'validationFailed',
+    UNKNOWN_ERROR: 'unknownError',
   };
 
   if (byCode[normalized]) return byCode[normalized];
@@ -27,10 +28,15 @@ const mapErrorCode = (code, status) => {
 };
 
 const parseApiError = (status, payload, fallbackText) => {
+  const rawMessage = payload?.message || payload?.errorMessage || payload?.error || fallbackText || '';
+  if (String(payload?.errorCode || payload?.code || '').toUpperCase() === 'UNKNOWN_ERROR' && /must|invalid|required|password|username/i.test(String(rawMessage))) {
+    return { key: 'validationFailed', message: String(rawMessage) };
+  }
+
   const key = mapErrorCode(payload?.code || payload?.errorCode, status);
   if (key) return { key, message: t(key) };
 
-  const message = payload?.message || payload?.error || fallbackText || t('httpError', { status });
+  const message = rawMessage || t('httpError', { status });
   return { key: null, message };
 };
 

@@ -28,6 +28,7 @@ const loadMe = async () => {
 
 const render = () => {
   if (!app) return;
+  loadMyRooms();
 
   app.innerHTML = renderLayout();
 
@@ -53,7 +54,31 @@ const loadLobbies = async (visibility = 'public', limit = 4) => {
   }
 };
 
+const loadMyRooms = () => {
+  if (!state.user) {
+    state.myRooms = [];
+    return;
+  }
+
+  const all = [...state.homeLobbies, ...state.lobbyCatalog];
+  const unique = new Map();
+  all
+    .filter((room) => room.ownerUserId === state.user.id)
+    .forEach((room) => unique.set(room.roomId, room));
+  state.myRooms = [...unique.values()];
+};
+
 await loadMe();
 await loadLobbies('public', 4);
 await loadLobbies('all', state.lobbyFilters.limit);
+loadMyRooms();
 render();
+
+setInterval(async () => {
+  await loadLobbies('public', 4);
+  await loadLobbies('all', state.lobbyFilters.limit);
+  loadMyRooms();
+  if (state.activeTab === 'home' || state.activeTab === 'lobbies' || state.activeTab === 'profile') {
+    render();
+  }
+}, 7000);
