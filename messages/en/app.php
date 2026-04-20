@@ -15,6 +15,7 @@ return [
     'error.INVALID_TOKEN_CLAIMS' => 'Invalid token claims.',
     'error.TOKEN_EXPIRED' => 'Token expired.',
     'error.INVITE_CODE_NOT_FOUND' => 'Invite code not found.',
+    'error.OWNER_ALREADY_HAS_ROOM' => 'You already have an active room. Close it before creating a new one.',
     'error.ROOM_PASSWORD_REQUIRED' => 'Lobby password is required.',
     'error.ROOM_PASSWORD_INVALID' => 'Invalid lobby password.',
     'error.ONLY_OWNER_CAN_START_GAME' => 'Only owner can start game.',

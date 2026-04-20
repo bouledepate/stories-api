@@ -15,6 +15,7 @@ return [
     'error.INVALID_TOKEN_CLAIMS' => 'Некорректные claims токена.',
     'error.TOKEN_EXPIRED' => 'Срок действия токена истёк.',
     'error.INVITE_CODE_NOT_FOUND' => 'Invite-код не найден.',
+    'error.OWNER_ALREADY_HAS_ROOM' => 'У вас уже есть активная комната. Закройте её перед созданием новой.',
     'error.ROOM_PASSWORD_REQUIRED' => 'Для этого лобби требуется пароль.',
     'error.ROOM_PASSWORD_INVALID' => 'Неверный пароль лобби.',
     'error.ONLY_OWNER_CAN_START_GAME' => 'Запустить игру может только владелец комнаты.',

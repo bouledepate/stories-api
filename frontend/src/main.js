@@ -4,6 +4,7 @@ import {
   bindAdminEvents,
   bindAuthEvents,
   bindCommonEvents,
+  ensureLobbyRealtime,
   bindDebugEvents,
   bindHomeEvents,
   bindLobbyEvents,
@@ -72,6 +73,11 @@ await loadMe();
 await loadLobbies('public', 4);
 await loadLobbies('all', state.lobbyFilters.limit);
 loadMyRooms();
+ensureLobbyRealtime(async () => {
+  await loadLobbies('public', 4);
+  await loadLobbies('all', state.lobbyFilters.limit);
+  loadMyRooms();
+}, render);
 render();
 
 setInterval(async () => {

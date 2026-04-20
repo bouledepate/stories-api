@@ -21,10 +21,16 @@ final class GetRoomStateAction
     }
 
     /** @param array<string, string> $args */
-    public function __invoke(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    public function __invoke(ServerRequestInterface $request, ResponseInterface $response, array $args = []): ResponseInterface
     {
         try {
             $actor = $this->auth->user($request);
+
+            if ($args === []) {
+                /** @var array<string, string>|null $routeArguments */
+                $routeArguments = $request->getAttribute('routeArguments');
+                $args = $routeArguments ?? [];
+            }
 
             return $this->responder->respond($response, $this->service->state((string) $args['roomId'], $actor->id));
         } catch (RuntimeException $exception) {

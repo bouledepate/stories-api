@@ -27,6 +27,10 @@ final class RoomService
     /** @return array<string, mixed> */
     public function create(CreateRoomRequest $request, AuthenticatedUser $actor): array
     {
+        if ($this->roomRepository->ownerHasRoom($actor->id)) {
+            throw new ApiException(ApiErrorCode::OWNER_ALREADY_HAS_ROOM);
+        }
+
         $roomId = $this->uuid();
         $password = trim($request->password);
         $passwordHash = $password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null;
@@ -75,6 +79,13 @@ final class RoomService
 
     public function leave(string $roomId, AuthenticatedUser $actor): void
     {
+        $room = $this->requireRoom($roomId);
+        if ($room->ownerUserId === $actor->id) {
+            $this->roomRepository->delete($roomId);
+
+            return;
+        }
+
         $this->participantRepository->remove($roomId, $actor->id);
     }
 
