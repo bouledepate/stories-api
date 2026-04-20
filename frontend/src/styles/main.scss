@@ -20,39 +20,28 @@ body {
     $bg;
 }
 
-.layout {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 28px 16px 40px;
-}
+.layout { max-width: 1080px; margin: 0 auto; padding: 24px 16px 40px; }
+.hero h1 { margin: 8px 0; font-size: clamp(24px, 4vw, 42px); }
+.hero p { margin: 0 0 10px; color: $muted; }
 
-.hero {
-  margin-bottom: 20px;
-  h1 { margin: 0; font-size: clamp(24px, 4vw, 42px); }
-  p { margin: 8px 0 0; color: $muted; }
-}
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
+.tab { background: $bg-soft; border: 1px solid $line; color: $text; padding: 8px 12px; border-radius: 10px; cursor: pointer; }
+.tab.active { background: rgba(127, 156, 255, .2); border-color: rgba(127, 156, 255, .55); }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
-}
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.stack { display: flex; flex-direction: column; gap: 8px; }
 
 .panel {
   border: 1px solid $line;
   background: linear-gradient(165deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
   border-radius: 16px;
   padding: 16px;
-  backdrop-filter: blur(6px);
-
-  h2 {
-    margin: 0 0 12px;
-    font-size: 17px;
-  }
 }
+.hidden { display: none; }
 
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
-input, button {
+.topgap { margin-top: 8px; }
+input, select, button {
   border-radius: 10px;
   border: 1px solid $line;
   background: $bg-soft;
@@ -61,11 +50,8 @@ input, button {
   font: inherit;
 }
 input { flex: 1; min-width: 130px; }
-button {
-  cursor: pointer;
-  transition: .2s ease;
-  &:hover { border-color: color.adjust($line, $lightness: 12%); }
-}
+button { cursor: pointer; }
+button:hover { border-color: color.adjust($line, $lightness: 12%); }
 button.primary {
   background: linear-gradient(135deg, $accent, #5dd7ff);
   border-color: transparent;
@@ -73,16 +59,15 @@ button.primary {
   font-weight: 700;
 }
 
-.status {
-  margin: 10px 0;
-  color: $muted;
-  &.ok { color: $success; }
-}
+.status { margin: 10px 0; color: $muted; }
+.status.ok { color: $success; }
+.session { margin-top: 8px; color: $muted; }
+.session.ok { color: $success; }
 
-.log {
-  margin-top: 8px;
-  min-height: 180px;
-  max-height: 300px;
+.log, .json {
+  margin-top: 10px;
+  min-height: 120px;
+  max-height: 320px;
   overflow: auto;
   border-radius: 12px;
   border: 1px solid $line;
@@ -91,12 +76,11 @@ button.primary {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
   line-height: 1.35;
+  white-space: pre-wrap;
 }
 
 .badge {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
   background: rgba(127, 156, 255, .14);
   border: 1px solid rgba(127, 156, 255, .35);
   border-radius: 999px;

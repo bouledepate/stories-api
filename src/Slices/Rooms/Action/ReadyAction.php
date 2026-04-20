@@ -9,6 +9,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use RuntimeException;
 use Stories\Shared\Http\JsonResponder;
+use Stories\Shared\Validation\InputValidator;
 use Stories\Shared\Security\AuthContext;
 use Stories\Slices\Rooms\Dto\ReadyRequest;
 use Stories\Slices\Rooms\Service\RoomService;
@@ -18,7 +19,8 @@ final class ReadyAction
     public function __construct(
         private readonly RoomService $service,
         private readonly AuthContext $auth,
-        private readonly JsonResponder $responder
+        private readonly JsonResponder $responder,
+        private readonly InputValidator $validator
     ) {
     }
 
@@ -30,8 +32,9 @@ final class ReadyAction
             /** @var array<string, mixed> $body */
             $body = (array) $request->getParsedBody();
             $dto = ReadyRequest::fromArray($body);
+            $this->validator->validate($dto);
 
-            return $this->responder->respond($response, $this->service->ready((string) $args['roomId'], $actor, $dto->ready));
+            return $this->responder->respond($response, $this->service->ready((string) $args['roomId'], $actor, (bool) $dto->ready));
         } catch (InvalidArgumentException|RuntimeException $exception) {
             return $this->responder->respond($response, ['error' => $exception->getMessage()], 400);
         }

@@ -9,6 +9,7 @@ use RuntimeException;
 use Stories\Shared\Security\JwtService;
 use Stories\Slices\Auth\Dto\LoginRequest;
 use Stories\Slices\Auth\Dto\RegisterRequest;
+use Stories\Slices\Auth\Dto\UpdateProfileRequest;
 
 final class AuthService
 {
@@ -21,7 +22,13 @@ final class AuthService
     /** @return array<string, mixed> */
     public function register(RegisterRequest $request): array
     {
-        $exists = $this->db->fetchOne('SELECT id FROM users WHERE username = ?', [$request->username]);
+        $exists = $this->db->createQueryBuilder()
+            ->select('u.id')
+            ->from('users', 'u')
+            ->where('u.username = :username')
+            ->setParameter('username', $request->username)
+            ->fetchOne();
+
         if ($exists !== false) {
             throw new RuntimeException('Username already exists');
         }
@@ -50,7 +57,13 @@ final class AuthService
     /** @return array<string, mixed> */
     public function login(LoginRequest $request): array
     {
-        $row = $this->db->fetchAssociative('SELECT id, username, password_hash, role FROM users WHERE username = ?', [$request->username]);
+        $row = $this->db->createQueryBuilder()
+            ->select('u.id', 'u.username', 'u.password_hash', 'u.role')
+            ->from('users', 'u')
+            ->where('u.username = :username')
+            ->setParameter('username', $request->username)
+            ->fetchAssociative();
+
         if ($row === false || $row['password_hash'] !== hash('sha256', $request->password)) {
             throw new RuntimeException('Invalid credentials');
         }
@@ -59,15 +72,49 @@ final class AuthService
     }
 
     /** @return array<string, mixed> */
+    public function updateProfile(string $userId, UpdateProfileRequest $request): array
+    {
+        $updates = [];
+
+        if ($request->username !== null) {
+            $exists = $this->db->createQueryBuilder()
+                ->select('u.id')
+                ->from('users', 'u')
+                ->where('u.username = :username')
+                ->andWhere('u.id <> :userId')
+                ->setParameter('username', $request->username)
+                ->setParameter('userId', $userId)
+                ->fetchOne();
+
+            if ($exists !== false) {
+                throw new RuntimeException('Username already exists');
+            }
+            $updates['username'] = $request->username;
+        }
+
+        if ($request->password !== null) {
+            $updates['password_hash'] = hash('sha256', $request->password);
+        }
+
+        if ($updates === []) {
+            throw new RuntimeException('No fields to update');
+        }
+
+        $this->db->update('users', $updates, ['id' => $userId]);
+
+        return $this->me($userId);
+    }
+
+    /** @return array<string, mixed> */
     public function me(string $userId): array
     {
-        $row = $this->db->fetchAssociative(
-            'SELECT u.id, u.username, u.role, s.wins, s.losses, s.victory_tokens, s.eliminated_with_3
-             FROM users u
-             JOIN user_stats s ON s.user_id = u.id
-             WHERE u.id = ?',
-            [$userId]
-        );
+        $row = $this->db->createQueryBuilder()
+            ->select('u.id', 'u.username', 'u.role', 's.wins', 's.losses', 's.victory_tokens', 's.eliminated_with_3')
+            ->from('users', 'u')
+            ->innerJoin('u', 'user_stats', 's', 's.user_id = u.id')
+            ->where('u.id = :id')
+            ->setParameter('id', $userId)
+            ->fetchAssociative();
 
         if ($row === false) {
             throw new RuntimeException('User not found');

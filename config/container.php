@@ -7,6 +7,7 @@ use Doctrine\DBAL\Connection;
 use Stories\Shared\Database\ConnectionFactory;
 use Stories\Shared\Security\JwtService;
 use Stories\Slices\Rooms\Service\RoomService;
+use Yiisoft\Validator\Validator;
 
 return static function (array $env): ContainerBuilder {
     $dbPath = (string) ($env['DB_PATH'] ?? (__DIR__ . '/../var/data.sqlite'));
@@ -22,6 +23,7 @@ return static function (array $env): ContainerBuilder {
     $builder->addDefinitions([
         Connection::class => static fn (): Connection => ConnectionFactory::create($dbPath),
         JwtService::class => static fn (): JwtService => new JwtService($jwtSecret),
+        Validator::class => static fn (): Validator => new Validator(),
         RoomService::class => DI\autowire()->constructorParameter('disconnectGraceSeconds', $disconnectGraceSeconds),
     ]);
 

@@ -14,11 +14,16 @@ $builder = $containerFactory($_ENV);
 $container = $builder->build();
 
 $app = Bridge::create($container);
-$app->addBodyParsingMiddleware();
-$app->addRoutingMiddleware();
-$app->addErrorMiddleware(true, true, true);
 
 $routes = require __DIR__ . '/../config/routes.php';
 $routes($app);
+
+$app->addBodyParsingMiddleware();
+$app->addRoutingMiddleware();
+
+$middleware = require __DIR__ . '/../config/middleware.php';
+$middleware($app);
+
+$app->addErrorMiddleware(true, true, true);
 
 $app->run();

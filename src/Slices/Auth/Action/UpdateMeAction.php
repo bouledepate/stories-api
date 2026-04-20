@@ -10,13 +10,15 @@ use Psr\Http\Message\ServerRequestInterface;
 use RuntimeException;
 use Stories\Shared\Http\JsonResponder;
 use Stories\Shared\Validation\InputValidator;
-use Stories\Slices\Auth\Dto\RegisterRequest;
+use Stories\Shared\Security\AuthContext;
+use Stories\Slices\Auth\Dto\UpdateProfileRequest;
 use Stories\Slices\Auth\Service\AuthService;
 
-final class RegisterAction
+final class UpdateMeAction
 {
     public function __construct(
         private readonly AuthService $service,
+        private readonly AuthContext $auth,
         private readonly JsonResponder $responder,
         private readonly InputValidator $validator
     ) {
@@ -25,13 +27,13 @@ final class RegisterAction
     public function __invoke(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         try {
+            $user = $this->auth->user($request);
             /** @var array<string, mixed> $body */
             $body = (array) $request->getParsedBody();
-            $dto = RegisterRequest::fromArray($body);
+            $dto = UpdateProfileRequest::fromArray($body);
             $this->validator->validate($dto);
-            $token = $this->service->register($dto);
 
-            return $this->responder->respond($response, $token, 201);
+            return $this->responder->respond($response, $this->service->updateProfile($user->id, $dto));
         } catch (InvalidArgumentException|RuntimeException $exception) {
             return $this->responder->respond($response, ['error' => $exception->getMessage()], 400);
         }
