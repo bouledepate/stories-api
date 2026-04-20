@@ -3,6 +3,8 @@ import { t } from './i18n';
 import { parseSafeUrl, safeTextValue } from './security';
 import { state } from './state';
 
+const LOBBIES_TOPIC = '__lobbies__';
+
 export const setStatus = (id, message, ok = false) => {
   const el = document.querySelector(`#${id}`);
   if (!el) return;
@@ -16,6 +18,63 @@ export const logDebug = (payload) => {
   const line = document.createElement('div');
   line.textContent = `[${new Date().toLocaleTimeString()}] ${typeof payload === 'string' ? payload : JSON.stringify(payload)}`;
   container.prepend(line);
+};
+
+const sendSocketMessage = (payload) => {
+  if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return;
+  state.socket.send(JSON.stringify(payload));
+};
+
+const emitLobbiesChanged = (event, data = {}) => {
+  sendSocketMessage({
+    type: 'lobbies_event',
+    event,
+    data,
+  });
+};
+
+const subscribeRoomSocket = (roomId) => {
+  if (!roomId) return;
+  sendSocketMessage({ type: 'subscribe_room', roomId });
+};
+
+export const ensureLobbyRealtime = (refreshLobbies, render) => {
+  if (state.socket?.readyState === WebSocket.OPEN || state.socket?.readyState === WebSocket.CONNECTING) return;
+
+  state.socket = new WebSocket(state.wsUrl);
+
+  state.socket.onopen = () => {
+    sendSocketMessage({ type: 'subscribe_lobbies' });
+    if (state.activeRoom?.roomId) {
+      subscribeRoomSocket(state.activeRoom.roomId);
+    }
+  };
+
+  state.socket.onmessage = async (event) => {
+    let payload;
+    try {
+      payload = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+
+    if (payload?.type === 'lobbies_event') {
+      await refreshLobbies();
+      if (state.activeTab === 'home' || state.activeTab === 'lobbies' || state.activeTab === 'profile') {
+        render();
+      }
+      return;
+    }
+
+    if (payload?.type === 'room_event' && payload?.roomId && state.activeRoom?.roomId === payload.roomId) {
+      try {
+        state.activeRoom = await callApi(`/rooms/${encodeURIComponent(payload.roomId)}`);
+        render();
+      } catch {
+        // noop
+      }
+    }
+  };
 };
 
 const openAuth = (render, mode = 'login') => {
@@ -140,6 +199,8 @@ export const bindHomeEvents = (render) => {
         method: 'POST',
         body: JSON.stringify(payload),
       });
+      subscribeRoomSocket(state.activeRoom.roomId);
+      emitLobbiesChanged('room_created', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
       state.roomModalOpen = false;
       state.activeTab = 'home';
       state.homeStatusMessage = `${t('roomCreated')} ${state.activeRoom.inviteCode}`;
@@ -165,6 +226,8 @@ export const bindHomeEvents = (render) => {
         method: 'POST',
         body: JSON.stringify(payload),
       });
+      subscribeRoomSocket(state.activeRoom.roomId);
+      emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
       state.roomModalOpen = false;
       state.activeTab = 'home';
       state.homeStatusMessage = `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`;
@@ -192,6 +255,7 @@ export const bindHomeEvents = (render) => {
       state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/ready`, {
         method: 'POST',
       });
+      emitLobbiesChanged('room_ready_changed', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
       setStatus('homeStatus', t('ready'), true);
       render();
     } catch (e) {
@@ -205,6 +269,7 @@ export const bindHomeEvents = (render) => {
       state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/start`, {
         method: 'POST',
       });
+      emitLobbiesChanged('room_started', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
       setStatus('homeStatus', t('ready'), true);
       render();
     } catch (e) {
@@ -215,10 +280,12 @@ export const bindHomeEvents = (render) => {
   document.querySelector('[data-act="leaveRoom"]')?.addEventListener('click', async () => {
     if (!requireRoom()) return;
     try {
+      const roomId = state.activeRoom.roomId;
       await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/leave`, {
         method: 'POST',
       });
       state.activeRoom = null;
+      emitLobbiesChanged('room_left', { roomId, topic: LOBBIES_TOPIC });
       setStatus('homeStatus', t('ready'), true);
       render();
     } catch (e) {
@@ -245,6 +312,8 @@ export const bindHomeEvents = (render) => {
             body: JSON.stringify(payload),
           });
         }
+        subscribeRoomSocket(state.activeRoom.roomId);
+        emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
         state.activeTab = 'home';
         setStatus('homeStatus', `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
         render();
@@ -294,6 +363,8 @@ export const bindLobbyEvents = (render) => {
             body: JSON.stringify(payload),
           });
         }
+        subscribeRoomSocket(state.activeRoom.roomId);
+        emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
         state.activeTab = 'home';
         setStatus('homeStatus', `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
         render();
@@ -443,6 +514,7 @@ export const bindDebugEvents = () => {
     state.socket.onopen = () => {
       setStatus('wsStatus', t('wsConnected'), true);
       logDebug('socket open');
+      sendSocketMessage({ type: 'subscribe_lobbies' });
     };
     state.socket.onmessage = (event) => {
       try {
