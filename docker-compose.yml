@@ -10,3 +10,14 @@ services:
       DISCONNECT_GRACE_SECONDS: 30
     volumes:
       - ./var:/app/var
+
+  ws:
+    build: .
+    command: ["php", "bin/ws-server.php"]
+    ports:
+      - '8081:8081'
+    environment:
+      WS_HOST: 0.0.0.0
+      WS_PORT: 8081
+    depends_on:
+      - api

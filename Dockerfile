@@ -13,6 +13,6 @@ RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
     && composer install --no-interaction --prefer-dist --no-dev \
     && rm composer-setup.php
 
-EXPOSE 8080
+EXPOSE 8080 8081
 
 CMD ["sh", "-c", "composer migrate && php -S 0.0.0.0:8080 -t public"]

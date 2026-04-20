@@ -26,7 +26,7 @@ final class PatchCardAction
     {
         try {
             $actor = $this->auth->user($request);
-            if (($actor['role'] ?? '') !== 'admin') {
+            if ($actor->role !== 'admin') {
                 throw new RuntimeException('Admin role required');
             }
 
