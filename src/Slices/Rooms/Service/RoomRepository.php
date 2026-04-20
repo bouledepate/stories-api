@@ -78,6 +78,7 @@ final class RoomRepository
                 'r.name',
                 'r.status',
                 'r.is_public',
+                'r.owner_user_id',
                 'r.invite_code',
                 'r.created_at',
                 'r.password_hash',
@@ -85,7 +86,7 @@ final class RoomRepository
             )
             ->from('rooms', 'r')
             ->leftJoin('r', 'room_participants', 'rp', 'rp.room_id = r.id')
-            ->groupBy('r.id', 'r.name', 'r.status', 'r.is_public', 'r.invite_code', 'r.created_at', 'r.password_hash')
+            ->groupBy('r.id', 'r.name', 'r.status', 'r.is_public', 'r.owner_user_id', 'r.invite_code', 'r.created_at', 'r.password_hash')
             ->orderBy('r.created_at', 'DESC')
             ->setMaxResults($limit)
             ->setFirstResult($offset);
@@ -109,6 +110,7 @@ final class RoomRepository
             'name' => (string) $row['name'],
             'status' => (string) $row['status'],
             'isPublic' => (bool) $row['is_public'],
+            'ownerUserId' => (string) $row['owner_user_id'],
             'hasPassword' => !empty($row['password_hash']),
             'playersCount' => (int) $row['players_count'],
             'inviteCode' => (string) $row['invite_code'],

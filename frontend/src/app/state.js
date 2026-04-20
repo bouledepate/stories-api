@@ -14,7 +14,10 @@ export const state = {
   },
   socket: null,
   lang: localStorage.getItem('stories_lang') || 'ru',
-  theme: localStorage.getItem('stories_theme') || 'dark',
   authOpen: false,
   authMode: 'login',
+  roomModalOpen: false,
+  roomModalMode: 'create',
+  homeStatusMessage: '',
+  myRooms: [],
 };

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Stories\Slices\Rooms\Dto;
 
 use Yiisoft\Validator\Rule\Length;
-use Yiisoft\Validator\Rule\Nullable;
 use Yiisoft\Validator\Rule\Required;
 use Yiisoft\Validator\Rule\StringValue;
 
@@ -19,22 +18,19 @@ final class CreateRoomRequest
 
         public readonly bool $isPublic = true,
 
-        #[Nullable]
         #[StringValue]
         #[Length(min: 0, max: 128)]
-        public readonly ?string $password = null
+        public readonly string $password = ''
     ) {
     }
 
     /** @param array<string, mixed> $data */
     public static function fromArray(array $data): self
     {
-        $password = trim((string) ($data['password'] ?? ''));
-
         return new self(
             trim((string) ($data['name'] ?? '')),
             (bool) ($data['isPublic'] ?? true),
-            $password === '' ? null : $password
+            trim((string) ($data['password'] ?? ''))
         );
     }
 }

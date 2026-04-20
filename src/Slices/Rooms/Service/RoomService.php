@@ -28,7 +28,8 @@ final class RoomService
     public function create(CreateRoomRequest $request, AuthenticatedUser $actor): array
     {
         $roomId = $this->uuid();
-        $passwordHash = $request->password !== null ? password_hash($request->password, PASSWORD_DEFAULT) : null;
+        $password = trim($request->password);
+        $passwordHash = $password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null;
         $this->roomRepository->create($roomId, $this->generateInviteCode(), $request->name, $actor->id, $request->isPublic, $passwordHash);
         $this->participantRepository->addOwner($roomId, $actor->id);
 
@@ -39,7 +40,9 @@ final class RoomService
     public function join(string $roomId, AuthenticatedUser $actor, bool $spectator, ?string $password = null): array
     {
         $room = $this->requireRoom($roomId);
-        $this->guardPassword($room, $password);
+        if ($room->ownerUserId !== $actor->id) {
+            $this->guardPassword($room, $password);
+        }
 
         $role = $spectator ? 'spectator' : 'player';
         $this->participantRepository->upsertParticipant($roomId, $actor->id, $role);
