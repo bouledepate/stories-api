@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-namespace Stories\Slices\Rooms\Action;
+namespace Stories\Slices\Auth\Action;
 
 use InvalidArgumentException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use RuntimeException;
 use Stories\Shared\Http\JsonResponder;
-use Stories\Shared\Validation\InputValidator;
 use Stories\Shared\Security\AuthContext;
-use Stories\Slices\Rooms\Dto\CreateRoomRequest;
-use Stories\Slices\Rooms\Service\RoomService;
+use Stories\Shared\Validation\InputValidator;
+use Stories\Slices\Auth\Dto\ChangePasswordRequest;
+use Stories\Slices\Auth\Service\AuthService;
 
-final class CreateRoomAction
+final class ChangePasswordAction
 {
     public function __construct(
-        private readonly RoomService $service,
+        private readonly AuthService $service,
         private readonly AuthContext $auth,
         private readonly JsonResponder $responder,
         private readonly InputValidator $validator
@@ -27,13 +27,14 @@ final class CreateRoomAction
     public function __invoke(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         try {
-            $actor = $this->auth->user($request);
+            $user = $this->auth->user($request);
             /** @var array<string, mixed> $body */
             $body = (array) $request->getParsedBody();
-            $dto = CreateRoomRequest::fromArray($body);
+            $dto = ChangePasswordRequest::fromArray($body);
             $this->validator->validate($dto);
+            $payload = $this->service->changePassword($user->id, $dto);
 
-            return $this->responder->respond($response, $this->service->create($dto, $actor), 201);
+            return $this->responder->respond($response, $payload);
         } catch (InvalidArgumentException|RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }

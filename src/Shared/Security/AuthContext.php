@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Stories\Shared\Security;
 
 use Psr\Http\Message\ServerRequestInterface;
-use RuntimeException;
+use Stories\Shared\Exception\ApiException;
+use Stories\Shared\Http\ApiErrorCode;
 
 final class AuthContext
 {
@@ -17,7 +18,7 @@ final class AuthContext
     {
         $header = $request->getHeaderLine('Authorization');
         if (!str_starts_with($header, 'Bearer ')) {
-            throw new RuntimeException('Missing bearer token');
+            throw new ApiException(ApiErrorCode::MISSING_BEARER_TOKEN);
         }
 
         $token = substr($header, 7);

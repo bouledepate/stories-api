@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Stories\Shared\Security;
 
-use RuntimeException;
+use Stories\Shared\Exception\ApiException;
+use Stories\Shared\Http\ApiErrorCode;
 
 final class JwtService
 {
@@ -36,28 +37,28 @@ final class JwtService
     {
         $parts = explode('.', $token);
         if (count($parts) !== 2) {
-            throw new RuntimeException('Invalid token format');
+            throw new ApiException(ApiErrorCode::INVALID_TOKEN_FORMAT);
         }
 
         [$encoded, $signature] = $parts;
         $expected = hash_hmac('sha256', $encoded, $this->secret);
         if (!hash_equals($expected, $signature)) {
-            throw new RuntimeException('Invalid token signature');
+            throw new ApiException(ApiErrorCode::INVALID_TOKEN_SIGNATURE);
         }
 
         $payloadJson = $this->base64UrlDecode($encoded);
         if ($payloadJson === false) {
-            throw new RuntimeException('Invalid token payload');
+            throw new ApiException(ApiErrorCode::INVALID_TOKEN_PAYLOAD);
         }
 
         /** @var array<string, mixed> $payload */
         $payload = (array) json_decode($payloadJson, true);
         if (!isset($payload['sub'], $payload['username'], $payload['role'], $payload['exp'])) {
-            throw new RuntimeException('Invalid token claims');
+            throw new ApiException(ApiErrorCode::INVALID_TOKEN_CLAIMS);
         }
 
         if ((int) $payload['exp'] < time()) {
-            throw new RuntimeException('Token expired');
+            throw new ApiException(ApiErrorCode::TOKEN_EXPIRED);
         }
 
         return $payload;

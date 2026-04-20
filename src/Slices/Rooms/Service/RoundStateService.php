@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Stories\Slices\Rooms\Service;
 
-use RuntimeException;
 use Stories\Shared\Security\AuthenticatedUser;
+use Stories\Shared\Exception\ApiException;
+use Stories\Shared\Http\ApiErrorCode;
 use Stories\Slices\Rooms\Domain\GameState;
 use Stories\Slices\Rooms\Dto\ActionRequest;
 
@@ -16,7 +17,7 @@ final class RoundStateService
     {
         $round = $state->round;
         if ($round->currentPlayerId() !== $actor->id) {
-            throw new RuntimeException('Not your turn');
+            throw new ApiException(ApiErrorCode::NOT_YOUR_TURN);
         }
 
         if ($request->actionType === 'draw_character') {
@@ -29,7 +30,7 @@ final class RoundStateService
 
         if ($request->actionType === 'play_character') {
             if ($request->cardCode === null) {
-                throw new RuntimeException('cardCode is required for play_character');
+                throw new ApiException(ApiErrorCode::CARD_CODE_REQUIRED);
             }
 
             $playedCard = $round->playCharacter($actor->id, $request->cardCode);

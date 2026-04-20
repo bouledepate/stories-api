@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Stories\Slices\Rooms\Service;
 
-use RuntimeException;
+use Stories\Shared\Exception\ApiException;
+use Stories\Shared\Http\ApiErrorCode;
 use Stories\Shared\Security\AuthenticatedUser;
 use Stories\Slices\Rooms\Domain\GameState;
 use Stories\Slices\Rooms\Dto\ActionRequest;
@@ -49,7 +50,7 @@ final class RoomService
     {
         $roomId = $this->roomRepository->findRoomIdByInviteCode($inviteCode);
         if ($roomId === null) {
-            throw new RuntimeException('Invite code not found');
+            throw new ApiException(ApiErrorCode::INVITE_CODE_NOT_FOUND);
         }
 
         return $this->join($roomId, $actor, $spectator);
@@ -74,12 +75,12 @@ final class RoomService
     {
         $room = $this->requireRoom($roomId);
         if ($room->ownerUserId !== $actor->id) {
-            throw new RuntimeException('Only owner can start game');
+            throw new ApiException(ApiErrorCode::ONLY_OWNER_CAN_START_GAME);
         }
 
         $playerIds = $this->participantRepository->fetchReadyPlayerIds($roomId);
         if (count($playerIds) < 2) {
-            throw new RuntimeException('Need at least 2 ready players');
+            throw new ApiException(ApiErrorCode::NEED_READY_PLAYERS);
         }
 
         $state = new GameState(
@@ -139,7 +140,7 @@ final class RoomService
     private function ensureParticipantExists(string $roomId, string $userId): void
     {
         if (!$this->participantRepository->exists($roomId, $userId)) {
-            throw new RuntimeException('User is not in room');
+            throw new ApiException(ApiErrorCode::USER_NOT_IN_ROOM);
         }
     }
 
@@ -153,7 +154,7 @@ final class RoomService
     {
         $room = $this->roomRepository->findById($roomId);
         if ($room === null) {
-            throw new RuntimeException('Room not found');
+            throw new ApiException(ApiErrorCode::ROOM_NOT_FOUND);
         }
 
         return $room;
@@ -163,7 +164,7 @@ final class RoomService
     {
         $game = $this->gameRepository->findByRoomId($roomId);
         if ($game === null) {
-            throw new RuntimeException('Game not started');
+            throw new ApiException(ApiErrorCode::GAME_NOT_STARTED);
         }
 
         return $game;
@@ -195,6 +196,6 @@ final class RoomService
             }
         }
 
-        throw new RuntimeException('Failed to generate invite code');
+        throw new ApiException(ApiErrorCode::INVITE_CODE_GENERATION_FAILED);
     }
 }

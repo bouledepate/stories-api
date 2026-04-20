@@ -12,6 +12,8 @@ const mapErrorCode = (code, status) => {
     FORBIDDEN: 'forbidden',
     ROOM_NOT_FOUND: 'roomNotFound',
     INVALID_INVITE_CODE: 'inviteInvalid',
+    INVITE_CODE_NOT_FOUND: 'inviteInvalid',
+    CURRENT_PASSWORD_INVALID: 'currentPasswordInvalid',
     VALIDATION_ERROR: 'validationFailed',
   };
 

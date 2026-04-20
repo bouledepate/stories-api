@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Stories\Slices\Rooms\Domain;
 
-use RuntimeException;
+use Stories\Shared\Exception\ApiException;
+use Stories\Shared\Http\ApiErrorCode;
 
 final class RoundState
 {
@@ -113,7 +114,7 @@ final class RoundState
             return $card->toPayload();
         }
 
-        throw new RuntimeException('Card not in hand');
+        throw new ApiException(ApiErrorCode::CARD_NOT_IN_HAND);
     }
 
     public function moveToNextAlivePlayer(): void

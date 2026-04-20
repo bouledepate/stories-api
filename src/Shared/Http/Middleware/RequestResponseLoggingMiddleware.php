@@ -8,31 +8,62 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
+use Psr\Log\LoggerInterface;
 
 final class RequestResponseLoggingMiddleware implements MiddlewareInterface
 {
+    public function __construct(private readonly LoggerInterface $logger)
+    {
+    }
+
     /** @var list<string> */
     private array $sensitiveKeys = ['password', 'password_hash', 'accessToken', 'token', 'authorization', 'cookie', 'set-cookie'];
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
         $startedAt = microtime(true);
+        $requestId = $this->requestId($request);
+        $userId = $this->userId($request);
+        $route = $request->getAttribute('route') ?? $request->getAttribute('__route__');
 
         $requestLog = [
             'event' => 'http.request',
+            'requestId' => $requestId,
+            'route' => is_string($route) ? $route : null,
+            'userId' => $userId,
             'method' => $request->getMethod(),
             'path' => $request->getUri()->getPath(),
+            'ip' => $request->getServerParams()['REMOTE_ADDR'] ?? null,
             'query' => $this->sanitize($request->getQueryParams()),
             'headers' => $this->sanitizeHeaders($request->getHeaders()),
             'body' => $this->sanitize($this->requestBody($request)),
         ];
 
-        error_log((string) json_encode($requestLog, JSON_UNESCAPED_UNICODE));
+        $this->logger->info('http.request', $requestLog);
 
-        $response = $handler->handle($request);
+        try {
+            $response = $handler->handle($request);
+        } catch (\Throwable $throwable) {
+            $errorLog = [
+                'event' => 'http.exception',
+                'requestId' => $requestId,
+                'route' => is_string($route) ? $route : null,
+                'userId' => $userId,
+                'method' => $request->getMethod(),
+                'path' => $request->getUri()->getPath(),
+                'durationMs' => (int) ((microtime(true) - $startedAt) * 1000),
+                'errorClass' => $throwable::class,
+                'errorMessage' => $throwable->getMessage(),
+            ];
+            $this->logger->error('http.exception', $errorLog);
+            throw $throwable;
+        }
 
         $responseLog = [
             'event' => 'http.response',
+            'requestId' => $requestId,
+            'route' => is_string($route) ? $route : null,
+            'userId' => $userId,
             'method' => $request->getMethod(),
             'path' => $request->getUri()->getPath(),
             'status' => $response->getStatusCode(),
@@ -41,9 +72,34 @@ final class RequestResponseLoggingMiddleware implements MiddlewareInterface
             'body' => $this->sanitize($this->responseBody($response)),
         ];
 
-        error_log((string) json_encode($responseLog, JSON_UNESCAPED_UNICODE));
+        $this->logger->info('http.response', $responseLog);
 
-        return $response;
+        return $response->withHeader('X-Request-Id', $requestId);
+    }
+
+    private function requestId(ServerRequestInterface $request): string
+    {
+        $headerId = trim($request->getHeaderLine('X-Request-Id'));
+        if ($headerId !== '') {
+            return $headerId;
+        }
+
+        return bin2hex(random_bytes(8));
+    }
+
+    private function userId(ServerRequestInterface $request): ?string
+    {
+        $auth = $request->getAttribute('auth');
+        if ($auth === null || !is_object($auth) || !property_exists($auth, 'id')) {
+            return null;
+        }
+
+        $id = $auth->id;
+        if (!is_string($id) || $id === '') {
+            return null;
+        }
+
+        return $id;
     }
 
     /** @return array<string, mixed>|string|null */
