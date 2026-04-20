@@ -5,11 +5,25 @@ services:
     ports:
       - '8080:8080'
     environment:
-      DB_PATH: /app/var/data.sqlite
-      JWT_SECRET: change-me
-      DISCONNECT_GRACE_SECONDS: 30
+      DB_DRIVER: ${DB_DRIVER:-sqlite}
+      DB_PATH: ${DB_PATH:-/app/var/data.sqlite}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-stories}
+      DB_USER: ${DB_USER:-stories}
+      DB_PASSWORD: ${DB_PASSWORD:-stories}
+      REDIS_ENABLED: ${REDIS_ENABLED:-0}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      DISCONNECT_GRACE_SECONDS: ${DISCONNECT_GRACE_SECONDS:-30}
     volumes:
       - ./var:/app/var
+    depends_on:
+      - postgres
+      - redis
 
   ws:
     build: .
@@ -21,3 +35,25 @@ services:
       WS_PORT: 8081
     depends_on:
       - api
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: stories
+      POSTGRES_USER: stories
+      POSTGRES_PASSWORD: stories
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:

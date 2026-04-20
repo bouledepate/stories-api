@@ -34,15 +34,63 @@ export const renderAuthModal = () => {
 
 const renderHero = () => `
   <section class="hero">
-    <div>
-      <span class="badge">${t('appTag')}</span>
-      <h1>${t('heroTitle')}</h1>
+    <div class="hero-copy">
+      <span class="hero-kicker">${t('appTag')}</span>
+      <h1>LETTERS:<br/>NO MERCY</h1>
+      <p class="hero-subline">DARK MEDIEVAL STORIES</p>
       <p>${t('heroSubtitle')}</p>
+      <div class="hero-actions">
+        <button class="primary" data-act="heroCreate">＋ ${t('heroCreate')}</button>
+        <button class="secondary" data-act="heroJoin">${t('heroJoin')}</button>
+      </div>
     </div>
-    <div class="hero-actions">
-      <button class="primary" data-act="heroCreate">${t('heroCreate')}</button>
-      <button class="secondary" data-act="heroJoin">${t('heroJoin')}</button>
+    <div class="hero-art" aria-hidden="true">
+      <div class="castle-silhouette"></div>
+      <div class="letter-token"></div>
     </div>
+  </section>
+`;
+
+const renderLobbyRooms = () => {
+  const rooms = state.homeLobbies;
+
+  return `
+    <section class="lobby-card">
+      <div class="lobby-head">
+        <h3>ДОСТУПНЫЕ КОМНАТЫ</h3>
+        <button class="chip" data-tab="lobbies">${t('navLobbies')}</button>
+      </div>
+      <div class="lobby-list">
+        ${rooms.length === 0 ? `<p>${t('lobbyNoItems')}</p>` : rooms.map((room) => `
+          <article class="lobby-item">
+            <div class="lobby-icon">${room.isPublic ? '☀' : '☾'}</div>
+            <div class="lobby-meta">
+              <h4>${esc(room.name)} ${room.hasPassword ? '<span class="inline-tag">🔒</span>' : ''}</h4>
+              <p>${room.isPublic ? t('visibilityPublic') : t('visibilityPrivate')} • ${room.hasPassword ? t('lobbyHasPassword') : t('lobbyNoPassword')}</p>
+            </div>
+            <div class="lobby-count">👥 ${room.playersCount} / 8</div>
+            <button class="secondary" data-act="joinLobby" data-room-id="${esc(room.roomId)}">${t('joinLobby')}</button>
+          </article>
+        `).join('')}
+      </div>
+    </section>
+  `;
+};
+
+const renderLandingFeatures = () => `
+  <section class="feature-strip">
+    <article>
+      <h4>БЛЕФ И СТРАТЕГИЯ</h4>
+      <p>Скрывайте свои намерения и читайте других.</p>
+    </article>
+    <article>
+      <h4>УНИКАЛЬНЫЕ ПЕРСОНАЖИ</h4>
+      <p>Каждый со своими способностями и тайными целями.</p>
+    </article>
+    <article>
+      <h4>ТЁМНОЕ СРЕДНЕВЕКОВЬЕ</h4>
+      <p>Атмосфера интриг, предательства и власти.</p>
+    </article>
   </section>
 `;
 
@@ -103,6 +151,8 @@ export const renderHome = () => {
           <h3>${t('createRoom')}</h3>
           <div class="stack">
             <input id="roomName" placeholder="${t('roomName')}" />
+            <label><input id="roomIsPublic" type="checkbox" checked /> ${t('visibilityPublic')}</label>
+            <input id="roomPassword" placeholder="${t('roomPassword')}" type="password" />
             <button class="primary" data-act="createRoom">${t('createRoom')}</button>
           </div>
         </article>
@@ -110,6 +160,7 @@ export const renderHome = () => {
           <h3>${t('connectCode')}</h3>
           <div class="stack">
             <input id="inviteCode" placeholder="AB12CD" maxlength="6" />
+            <input id="joinPassword" placeholder="${t('roomPassword')}" type="password" />
             <label><input id="joinAsSpectator" type="checkbox" /> ${t('spectator')}</label>
             <button class="secondary" data-act="joinByCode">${t('connect')}</button>
           </div>
@@ -119,11 +170,48 @@ export const renderHome = () => {
 
   return `
     ${renderHero()}
+    ${renderLobbyRooms()}
+    ${renderLandingFeatures()}
     <div id="homeStatus" class="status">${t('ready')}</div>
     ${actions}
     ${renderRoomPanel()}
   `;
 };
+
+export const renderLobbies = () => `
+  <h2>${t('lobbyTitle')}</h2>
+  <p>${t('lobbyHint')}</p>
+  <article>
+    <div class="row">
+      <select id="lobbyVisibility">
+        <option value="all" ${state.lobbyFilters.visibility === 'all' ? 'selected' : ''}>${t('visibilityAll')}</option>
+        <option value="public" ${state.lobbyFilters.visibility === 'public' ? 'selected' : ''}>${t('visibilityPublic')}</option>
+        <option value="private" ${state.lobbyFilters.visibility === 'private' ? 'selected' : ''}>${t('visibilityPrivate')}</option>
+      </select>
+      <select id="lobbyPasswordFilter">
+        <option value="all" ${state.lobbyFilters.password === 'all' ? 'selected' : ''}>${t('passwordAll')}</option>
+        <option value="with_password" ${state.lobbyFilters.password === 'with_password' ? 'selected' : ''}>${t('passwordWith')}</option>
+        <option value="without_password" ${state.lobbyFilters.password === 'without_password' ? 'selected' : ''}>${t('passwordWithout')}</option>
+      </select>
+      <input id="lobbyLimit" type="number" min="1" max="100" value="${state.lobbyFilters.limit}" />
+      <button class="secondary" data-act="loadLobbies">${t('loadLobbies')}</button>
+    </div>
+  </article>
+  <div class="lobby-list topgap">
+    ${state.lobbyCatalog.length === 0 ? `<article><p>${t('lobbyNoItems')}</p></article>` : state.lobbyCatalog.map((room) => `
+      <article class="lobby-item">
+        <div class="lobby-icon">${room.isPublic ? '☀' : '☾'}</div>
+        <div class="lobby-meta">
+          <h4>${esc(room.name)}</h4>
+          <p>${room.status} • ${room.hasPassword ? t('lobbyHasPassword') : t('lobbyNoPassword')}</p>
+        </div>
+        <div class="lobby-count">👥 ${room.playersCount} / 8</div>
+        <button class="secondary" data-act="joinLobby" data-room-id="${esc(room.roomId)}">${t('joinLobby')}</button>
+      </article>
+    `).join('')}
+  </div>
+  <div id="lobbyStatus" class="status">${t('ready')}</div>
+`;
 
 export const renderProfile = () => {
   if (!state.user) return `<h2>${t('profileTitle')}</h2><div class="status">${t('needAuthProfile')}</div>`;
@@ -233,7 +321,8 @@ export const renderLayout = () => {
   <main class="layout ${state.theme}">
     <header class="topbar">
       <div class="brand">
-        <h2>${t('title')}</h2>
+        <h2>LETTERS: NO MERCY</h2>
+        <p class="brand-sub">Dark Medieval Stories</p>
         ${userBlock}
       </div>
       <div class="topbar-actions">
@@ -253,11 +342,13 @@ export const renderLayout = () => {
 
     <nav class="tabs">
       <button class="tab ${state.activeTab === 'home' ? 'active' : ''}" data-tab="home">${t('navHome')}</button>
+      <button class="tab ${state.activeTab === 'lobbies' ? 'active' : ''}" data-tab="lobbies">${t('navLobbies')}</button>
       <button class="tab ${state.activeTab === 'profile' ? 'active' : ''}" data-tab="profile">${t('navProfile')}</button>
       ${state.user?.role === 'admin' ? `<button class="tab ${state.activeTab === 'control' ? 'active' : ''}" data-tab="control">${t('navControl')}</button>` : ''}
     </nav>
 
     <section class="panel ${state.activeTab === 'home' ? '' : 'hidden'}">${renderHome()}</section>
+    <section class="panel ${state.activeTab === 'lobbies' ? '' : 'hidden'}">${renderLobbies()}</section>
     <section class="panel ${state.activeTab === 'profile' ? '' : 'hidden'}">${renderProfile()}</section>
     ${state.user?.role === 'admin' ? `<section class="panel ${state.activeTab === 'control' ? '' : 'hidden'}">${renderControlPanel()}</section>` : ''}
 

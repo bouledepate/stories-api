@@ -25,9 +25,15 @@ final class JoinRoomAction
     {
         try {
             $actor = $this->auth->user($request);
-            $spectator = (($request->getQueryParams()['spectator'] ?? 'false') === 'true');
+            /** @var array<string, mixed> $body */
+            $body = (array) $request->getParsedBody();
+            $spectator = (($request->getQueryParams()['spectator'] ?? 'false') === 'true') || (bool) ($body['spectator'] ?? false);
+            $password = trim((string) ($body['password'] ?? ''));
 
-            return $this->responder->respond($response, $this->service->join((string) $args['roomId'], $actor, $spectator));
+            return $this->responder->respond(
+                $response,
+                $this->service->join((string) $args['roomId'], $actor, $spectator, $password === '' ? null : $password)
+            );
         } catch (RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }

@@ -28,16 +28,18 @@ final class RoomService
     public function create(CreateRoomRequest $request, AuthenticatedUser $actor): array
     {
         $roomId = $this->uuid();
-        $this->roomRepository->create($roomId, $this->generateInviteCode(), $request->name, $actor->id);
+        $passwordHash = $request->password !== null ? password_hash($request->password, PASSWORD_DEFAULT) : null;
+        $this->roomRepository->create($roomId, $this->generateInviteCode(), $request->name, $actor->id, $request->isPublic, $passwordHash);
         $this->participantRepository->addOwner($roomId, $actor->id);
 
         return $this->snapshot($roomId, $actor->id);
     }
 
     /** @return array<string, mixed> */
-    public function join(string $roomId, AuthenticatedUser $actor, bool $spectator): array
+    public function join(string $roomId, AuthenticatedUser $actor, bool $spectator, ?string $password = null): array
     {
-        $this->requireRoom($roomId);
+        $room = $this->requireRoom($roomId);
+        $this->guardPassword($room, $password);
 
         $role = $spectator ? 'spectator' : 'player';
         $this->participantRepository->upsertParticipant($roomId, $actor->id, $role);
@@ -46,14 +48,26 @@ final class RoomService
     }
 
     /** @return array<string, mixed> */
-    public function joinByInviteCode(string $inviteCode, AuthenticatedUser $actor, bool $spectator): array
+    public function joinByInviteCode(string $inviteCode, AuthenticatedUser $actor, bool $spectator, ?string $password = null): array
     {
         $roomId = $this->roomRepository->findRoomIdByInviteCode($inviteCode);
         if ($roomId === null) {
             throw new ApiException(ApiErrorCode::INVITE_CODE_NOT_FOUND);
         }
 
-        return $this->join($roomId, $actor, $spectator);
+        return $this->join($roomId, $actor, $spectator, $password);
+    }
+
+    /**
+     * @return array{items:list<array<string,mixed>>,limit:int,offset:int}
+     */
+    public function listLobbies(string $visibility, string $passwordFilter, int $limit, int $offset): array
+    {
+        return [
+            'items' => $this->roomRepository->listLobbies($visibility, $passwordFilter, $limit, $offset),
+            'limit' => $limit,
+            'offset' => $offset,
+        ];
     }
 
     public function leave(string $roomId, AuthenticatedUser $actor): void
@@ -197,5 +211,20 @@ final class RoomService
         }
 
         throw new ApiException(ApiErrorCode::INVITE_CODE_GENERATION_FAILED);
+    }
+
+    private function guardPassword(RoomRecord $room, ?string $password): void
+    {
+        if ($room->passwordHash === null) {
+            return;
+        }
+
+        if ($password === null || $password === '') {
+            throw new ApiException(ApiErrorCode::ROOM_PASSWORD_REQUIRED);
+        }
+
+        if (!password_verify($password, $room->passwordHash)) {
+            throw new ApiException(ApiErrorCode::ROOM_PASSWORD_INVALID);
+        }
     }
 }

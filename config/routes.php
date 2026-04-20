@@ -19,6 +19,7 @@ use Stories\Slices\Rooms\Action\GetRoomStateAction;
 use Stories\Slices\Rooms\Action\JoinByInviteCodeAction;
 use Stories\Slices\Rooms\Action\JoinRoomAction;
 use Stories\Slices\Rooms\Action\LeaveRoomAction;
+use Stories\Slices\Rooms\Action\ListLobbiesAction;
 use Stories\Slices\Rooms\Action\ReadyAction;
 use Stories\Slices\Rooms\Action\StartGameAction;
 use Stories\Slices\Rooms\Action\SubmitAction;
@@ -39,6 +40,7 @@ return static function (App $app): void {
     $app->post('/auth/change-password', ChangePasswordAction::class);
 
     $app->post('/rooms', CreateRoomAction::class);
+    $app->get('/lobbies', ListLobbiesAction::class);
     $app->post('/rooms/{roomId}/join', JoinRoomAction::class);
     $app->post('/rooms/join-by-code', JoinByInviteCodeAction::class);
     $app->post('/rooms/{roomId}/leave', LeaveRoomAction::class);

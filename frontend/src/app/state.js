@@ -5,6 +5,13 @@ export const state = {
   user: null,
   activeRoom: null,
   activeTab: 'home',
+  homeLobbies: [],
+  lobbyCatalog: [],
+  lobbyFilters: {
+    visibility: 'all',
+    password: 'all',
+    limit: 20,
+  },
   socket: null,
   lang: localStorage.getItem('stories_lang') || 'ru',
   theme: localStorage.getItem('stories_theme') || 'dark',

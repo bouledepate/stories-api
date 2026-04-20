@@ -6,6 +6,7 @@ import {
   bindCommonEvents,
   bindDebugEvents,
   bindHomeEvents,
+  bindLobbyEvents,
   bindProfileEvents,
 } from './app/events';
 import { renderLayout } from './app/views';
@@ -32,6 +33,7 @@ const render = () => {
 
   bindCommonEvents(render);
   if (state.activeTab === 'home') bindHomeEvents(render);
+  if (state.activeTab === 'lobbies') bindLobbyEvents(render);
   if (state.activeTab === 'profile') bindProfileEvents(render);
   if (state.activeTab === 'control' && state.user?.role === 'admin') {
     bindAdminEvents();
@@ -40,5 +42,18 @@ const render = () => {
   if (state.authOpen && !state.user) bindAuthEvents(render, loadMe);
 };
 
+const loadLobbies = async (visibility = 'public', limit = 4) => {
+  try {
+    const data = await callApi(`/lobbies?visibility=${encodeURIComponent(visibility)}&limit=${limit}`);
+    if (visibility === 'public') state.homeLobbies = data.items || [];
+    if (visibility === 'all') state.lobbyCatalog = data.items || [];
+  } catch {
+    if (visibility === 'public') state.homeLobbies = [];
+    if (visibility === 'all') state.lobbyCatalog = [];
+  }
+};
+
 await loadMe();
+await loadLobbies('public', 4);
+await loadLobbies('all', state.lobbyFilters.limit);
 render();
