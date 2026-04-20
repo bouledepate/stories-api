@@ -112,6 +112,7 @@ docker compose up --build
 Starts:
 - `api` on `:8080`
 - `ws` on `:8081`
+- `postgres` and `redis` are available inside the compose network (host ports are not bound to avoid local port conflicts).
 
 ## Environment
 
