@@ -133,6 +133,7 @@ const renderRoomPanel = () => {
   const participants = Array.isArray(state.activeRoom.participants) ? state.activeRoom.participants : [];
   const players = participants.filter((participant) => participant.role !== 'spectator');
   const spectators = participants.filter((participant) => participant.role === 'spectator');
+  const isOwner = Boolean(state.user?.id) && state.user.id === state.activeRoom.ownerId;
 
   return `
     <article class="room-panel">
@@ -157,7 +158,7 @@ const renderRoomPanel = () => {
           <button class="secondary" data-act="refreshRoom">${t('refreshRoom')}</button>
           <button class="secondary" data-act="readyRoom">${t('markReady')}</button>
           <button class="primary" data-act="startGame">${t('startGame')}</button>
-          <button class="chip" data-act="leaveRoom">${t('leaveRoom')}</button>
+          <button class="chip" data-act="leaveRoom">${isOwner ? t('closeOwnedRoom') : t('leaveRoom')}</button>
         </div>
       </div>
     </article>

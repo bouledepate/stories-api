@@ -75,6 +75,11 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
       }
     }
   };
+
+  state.socket.onclose = () => {
+    state.socket = null;
+    window.setTimeout(() => ensureLobbyRealtime(refreshLobbies, render), 3000);
+  };
 };
 
 const openAuth = (render, mode = 'login') => {
@@ -176,6 +181,20 @@ export const bindAuthEvents = async (render, loadMe) => {
 };
 
 export const bindHomeEvents = (render) => {
+  const hydrateActiveRoom = async () => {
+    if (!state.activeRoom?.roomId) return;
+    if (state.activeRoom.ownerId && state.activeRoom.inviteCode) return;
+
+    try {
+      state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}`);
+      render();
+    } catch (e) {
+      setStatus('homeStatus', e.message);
+    }
+  };
+
+  void hydrateActiveRoom();
+
   const requireRoom = () => {
     if (!state.activeRoom?.roomId) {
       setStatus('homeStatus', t('roomNotFound'));

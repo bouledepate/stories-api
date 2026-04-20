@@ -79,12 +79,3 @@ ensureLobbyRealtime(async () => {
   loadMyRooms();
 }, render);
 render();
-
-setInterval(async () => {
-  await loadLobbies('public', 4);
-  await loadLobbies('all', state.lobbyFilters.limit);
-  loadMyRooms();
-  if (state.activeTab === 'home' || state.activeTab === 'lobbies' || state.activeTab === 'profile') {
-    render();
-  }
-}, 7000);

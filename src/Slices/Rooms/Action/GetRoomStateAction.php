@@ -25,16 +25,36 @@ final class GetRoomStateAction
     {
         try {
             $actor = $this->auth->user($request);
+            $roomId = $this->resolveRoomId($request, $args);
 
-            if ($args === []) {
-                /** @var array<string, string>|null $routeArguments */
-                $routeArguments = $request->getAttribute('routeArguments');
-                $args = $routeArguments ?? [];
-            }
-
-            return $this->responder->respond($response, $this->service->state((string) $args['roomId'], $actor->id));
+            return $this->responder->respond($response, $this->service->state($roomId, $actor->id));
         } catch (RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }
+    }
+
+    /** @param array<string, string> $args */
+    private function resolveRoomId(ServerRequestInterface $request, array $args): string
+    {
+        if (($args['roomId'] ?? '') !== '') {
+            return (string) $args['roomId'];
+        }
+
+        /** @var object|null $route */
+        $route = $request->getAttribute('route');
+        if (is_object($route) && method_exists($route, 'getArguments')) {
+            /** @var mixed $routeArguments */
+            $routeArguments = $route->getArguments();
+            if (is_array($routeArguments) && ($routeArguments['roomId'] ?? '') !== '') {
+                return (string) $routeArguments['roomId'];
+            }
+        }
+
+        $path = $request->getUri()->getPath();
+        if (preg_match('#/rooms/([^/]+)$#', $path, $matches) === 1 && ($matches[1] ?? '') !== '') {
+            return (string) $matches[1];
+        }
+
+        throw new RuntimeException('roomId is required');
     }
 }
