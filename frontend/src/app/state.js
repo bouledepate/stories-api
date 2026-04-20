@@ -1,0 +1,13 @@
+export const state = {
+  apiBase: window.location.origin,
+  wsUrl: `ws://${window.location.hostname}:8081`,
+  token: localStorage.getItem('stories_token') || '',
+  user: null,
+  activeRoom: null,
+  activeTab: 'home',
+  socket: null,
+  lang: localStorage.getItem('stories_lang') || 'ru',
+  theme: localStorage.getItem('stories_theme') || 'dark',
+  authOpen: false,
+  authMode: 'login',
+};

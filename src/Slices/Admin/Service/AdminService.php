@@ -22,7 +22,13 @@ final class AdminService
             throw new RuntimeException('Deck not found');
         }
 
-        $cards = $this->db->fetchAllAssociative('SELECT deck, code, name, text, value, effect_key, enabled, version FROM cards WHERE deck = ? ORDER BY id', [$deck]);
+        $cards = $this->db->createQueryBuilder()
+            ->select('c.deck', 'c.code', 'c.name', 'c.text', 'c.value', 'c.effect_key', 'c.enabled', 'c.version')
+            ->from('cards', 'c')
+            ->where('c.deck = :deck')
+            ->orderBy('c.id')
+            ->setParameter('deck', $deck)
+            ->fetchAllAssociative();
 
         return ['deck' => $deck, 'cards' => array_map([$this, 'normalizeCard'], $cards)];
     }
@@ -30,7 +36,14 @@ final class AdminService
     /** @return array<string, mixed> */
     public function patch(string $deck, string $cardCode, PatchCardRequest $request): array
     {
-        $card = $this->db->fetchAssociative('SELECT id, deck, code, name, text, value, effect_key, enabled, version FROM cards WHERE deck = ? AND code = ?', [$deck, $cardCode]);
+        $card = $this->db->createQueryBuilder()
+            ->select('c.id', 'c.deck', 'c.code', 'c.name', 'c.text', 'c.value', 'c.effect_key', 'c.enabled', 'c.version')
+            ->from('cards', 'c')
+            ->where('c.deck = :deck')
+            ->andWhere('c.code = :code')
+            ->setParameter('deck', $deck)
+            ->setParameter('code', $cardCode)
+            ->fetchAssociative();
         if ($card === false) {
             throw new RuntimeException('Card not found');
         }
@@ -55,7 +68,12 @@ final class AdminService
         $updates['version'] = (int) $card['version'] + 1;
         $this->db->update('cards', $updates, ['id' => $card['id']]);
 
-        $fresh = $this->db->fetchAssociative('SELECT deck, code, name, text, value, effect_key, enabled, version FROM cards WHERE id = ?', [$card['id']]);
+        $fresh = $this->db->createQueryBuilder()
+            ->select('c.deck', 'c.code', 'c.name', 'c.text', 'c.value', 'c.effect_key', 'c.enabled', 'c.version')
+            ->from('cards', 'c')
+            ->where('c.id = :id')
+            ->setParameter('id', $card['id'])
+            ->fetchAssociative();
 
         return [
             'status' => 'updated',
@@ -66,7 +84,12 @@ final class AdminService
     /** @return array<string, mixed> */
     public function effects(): array
     {
-        $rows = $this->db->fetchAllAssociative('SELECT deck, code, effect_key FROM cards ORDER BY deck, id');
+        $rows = $this->db->createQueryBuilder()
+            ->select('c.deck', 'c.code', 'c.effect_key')
+            ->from('cards', 'c')
+            ->orderBy('c.deck')
+            ->addOrderBy('c.id')
+            ->fetchAllAssociative();
 
         return [
             'effects' => array_map(

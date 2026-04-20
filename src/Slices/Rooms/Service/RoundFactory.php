@@ -19,16 +19,28 @@ final class RoundFactory
     {
         $characterDeck = array_map(
             static fn (array $row): GameCard => GameCard::fromDbRow($row),
-            $this->db->fetchAllAssociative(
-                "SELECT code, name, value, text FROM cards WHERE deck='character' AND enabled=1 AND code <> 'shadow' ORDER BY RANDOM()"
-            )
+            $this->db->createQueryBuilder()
+                ->select('c.code', 'c.name', 'c.value', 'c.text')
+                ->from('cards', 'c')
+                ->where('c.deck = :deck')
+                ->andWhere('c.enabled = 1')
+                ->andWhere('c.code <> :excludedCode')
+                ->orderBy('RANDOM()')
+                ->setParameter('deck', 'character')
+                ->setParameter('excludedCode', 'shadow')
+                ->fetchAllAssociative()
         );
 
         $decrees = array_map(
             static fn (array $row): GameCard => GameCard::fromDbRow($row),
-            $this->db->fetchAllAssociative(
-                "SELECT code, name, text, effect_key FROM cards WHERE deck='decree' AND enabled=1 ORDER BY RANDOM()"
-            )
+            $this->db->createQueryBuilder()
+                ->select('c.code', 'c.name', 'c.text', 'c.effect_key')
+                ->from('cards', 'c')
+                ->where('c.deck = :deck')
+                ->andWhere('c.enabled = 1')
+                ->orderBy('RANDOM()')
+                ->setParameter('deck', 'decree')
+                ->fetchAllAssociative()
         );
 
         $hiddenCard = array_shift($characterDeck);
