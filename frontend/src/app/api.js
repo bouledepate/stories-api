@@ -15,6 +15,7 @@ const mapErrorCode = (code, status) => {
     INVITE_CODE_NOT_FOUND: 'inviteInvalid',
     ROOM_PASSWORD_REQUIRED: 'roomPasswordRequired',
     ROOM_PASSWORD_INVALID: 'roomPasswordInvalid',
+    OWNER_ALREADY_HAS_ROOM: 'ownerAlreadyHasRoom',
     CURRENT_PASSWORD_INVALID: 'currentPasswordInvalid',
     VALIDATION_ERROR: 'validationFailed',
     UNKNOWN_ERROR: 'unknownError',

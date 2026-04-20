@@ -53,8 +53,20 @@ final class RoomWebSocketServer implements MessageComponentInterface
             return;
         }
 
+        if ($message->type === 'subscribe_lobbies') {
+            $this->handleLobbiesSubscription($connection);
+
+            return;
+        }
+
         if ($message->type === 'room_event') {
             $this->handleRoomEvent($connection, $message);
+
+            return;
+        }
+
+        if ($message->type === 'lobbies_event') {
+            $this->handleLobbiesEvent($connection, $message);
 
             return;
         }
@@ -136,6 +148,32 @@ final class RoomWebSocketServer implements MessageComponentInterface
         ]);
     }
 
+    private function handleLobbiesSubscription(ConnectionInterface $connection): void
+    {
+        /** @var ConnectionState $state */
+        $state = $this->clients[$connection];
+        $state->lobbiesSubscribed = true;
+
+        $this->send($connection, [
+            'type' => 'lobbies_subscribed',
+            'timestamp' => time(),
+        ]);
+    }
+
+    private function handleLobbiesEvent(ConnectionInterface $connection, SocketMessage $message): void
+    {
+        /** @var ConnectionState $state */
+        $state = $this->clients[$connection];
+
+        $this->broadcastToLobbies([
+            'type' => 'lobbies_event',
+            'event' => $message->eventName(),
+            'data' => $message->eventData(),
+            'from' => $state->clientId,
+            'timestamp' => time(),
+        ]);
+    }
+
     /** @param array<string, mixed> $payload */
     private function send(ConnectionInterface $connection, array $payload): void
     {
@@ -149,6 +187,20 @@ final class RoomWebSocketServer implements MessageComponentInterface
             /** @var ConnectionState $state */
             $state = $this->clients[$connection];
             if ($state->roomId !== $roomId) {
+                continue;
+            }
+
+            $this->send($connection, $payload);
+        }
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function broadcastToLobbies(array $payload): void
+    {
+        foreach ($this->clients as $connection) {
+            /** @var ConnectionState $state */
+            $state = $this->clients[$connection];
+            if (!$state->lobbiesSubscribed) {
                 continue;
             }
 

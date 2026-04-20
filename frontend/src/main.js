@@ -4,6 +4,7 @@ import {
   bindAdminEvents,
   bindAuthEvents,
   bindCommonEvents,
+  ensureLobbyRealtime,
   bindDebugEvents,
   bindHomeEvents,
   bindLobbyEvents,
@@ -72,13 +73,9 @@ await loadMe();
 await loadLobbies('public', 4);
 await loadLobbies('all', state.lobbyFilters.limit);
 loadMyRooms();
-render();
-
-setInterval(async () => {
+ensureLobbyRealtime(async () => {
   await loadLobbies('public', 4);
   await loadLobbies('all', state.lobbyFilters.limit);
   loadMyRooms();
-  if (state.activeTab === 'home' || state.activeTab === 'lobbies' || state.activeTab === 'profile') {
-    render();
-  }
-}, 7000);
+}, render);
+render();

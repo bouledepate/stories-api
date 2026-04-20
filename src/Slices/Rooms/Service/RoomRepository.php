@@ -31,6 +31,24 @@ final class RoomRepository
         $this->db->update('rooms', ['status' => $status], ['id' => $roomId]);
     }
 
+    public function ownerHasRoom(string $ownerUserId): bool
+    {
+        $exists = $this->db->createQueryBuilder()
+            ->select('1')
+            ->from('rooms', 'r')
+            ->where('r.owner_user_id = :ownerUserId')
+            ->setParameter('ownerUserId', $ownerUserId)
+            ->setMaxResults(1)
+            ->fetchOne();
+
+        return $exists !== false;
+    }
+
+    public function delete(string $roomId): void
+    {
+        $this->db->delete('rooms', ['id' => $roomId]);
+    }
+
     public function findById(string $roomId): ?RoomRecord
     {
         $row = $this->db->createQueryBuilder()

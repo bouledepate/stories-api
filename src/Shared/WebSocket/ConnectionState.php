@@ -8,7 +8,8 @@ final class ConnectionState
 {
     public function __construct(
         public readonly string $clientId,
-        public ?string $roomId = null
+        public ?string $roomId = null,
+        public bool $lobbiesSubscribed = false
     ) {
     }
 

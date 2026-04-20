@@ -1,6 +1,9 @@
+const wsHost = (window.location.hostname === '0.0.0.0' || window.location.hostname === '') ? 'localhost' : window.location.hostname;
+const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+
 export const state = {
   apiBase: window.location.origin,
-  wsUrl: `ws://${window.location.hostname}:8081`,
+  wsUrl: `${wsProtocol}://${wsHost}:8081`,
   token: localStorage.getItem('stories_token') || '',
   user: null,
   activeRoom: null,
