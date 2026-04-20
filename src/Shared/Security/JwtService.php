@@ -16,15 +16,16 @@ final class JwtService
 
     public function issue(string $userId, string $username, string $role): string
     {
+        $issuedAt = time();
         $payload = [
             'sub' => $userId,
             'username' => $username,
             'role' => $role,
-            'exp' => time() + $this->ttlSeconds,
+            'iat' => $issuedAt,
+            'exp' => $issuedAt + $this->ttlSeconds,
         ];
 
-        $json = (string) json_encode($payload, JSON_UNESCAPED_UNICODE);
-        $encoded = rtrim(strtr(base64_encode($json), '+/', '-_'), '=');
+        $encoded = $this->base64UrlEncode((string) json_encode($payload, JSON_UNESCAPED_UNICODE));
         $signature = hash_hmac('sha256', $encoded, $this->secret);
 
         return $encoded . '.' . $signature;
@@ -44,17 +45,36 @@ final class JwtService
             throw new RuntimeException('Invalid token signature');
         }
 
-        $payloadJson = base64_decode(strtr($encoded, '-_', '+/'), true);
+        $payloadJson = $this->base64UrlDecode($encoded);
         if ($payloadJson === false) {
             throw new RuntimeException('Invalid token payload');
         }
 
         /** @var array<string, mixed> $payload */
         $payload = (array) json_decode($payloadJson, true);
-        if (!isset($payload['exp']) || (int) $payload['exp'] < time()) {
+        if (!isset($payload['sub'], $payload['username'], $payload['role'], $payload['exp'])) {
+            throw new RuntimeException('Invalid token claims');
+        }
+
+        if ((int) $payload['exp'] < time()) {
             throw new RuntimeException('Token expired');
         }
 
         return $payload;
+    }
+
+    private function base64UrlEncode(string $value): string
+    {
+        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+    }
+
+    private function base64UrlDecode(string $value): string|false
+    {
+        $padLength = 4 - (strlen($value) % 4);
+        if ($padLength < 4) {
+            $value .= str_repeat('=', $padLength);
+        }
+
+        return base64_decode(strtr($value, '-_', '+/'), true);
     }
 }

@@ -7,6 +7,7 @@ namespace Stories\Slices\Auth\Service;
 use Doctrine\DBAL\Connection;
 use RuntimeException;
 use Stories\Shared\Security\JwtService;
+use Stories\Shared\Security\PasswordHasher;
 use Stories\Slices\Auth\Dto\LoginRequest;
 use Stories\Slices\Auth\Dto\RegisterRequest;
 use Stories\Slices\Auth\Dto\UpdateProfileRequest;
@@ -15,7 +16,8 @@ final class AuthService
 {
     public function __construct(
         private readonly Connection $db,
-        private readonly JwtService $jwtService
+        private readonly JwtService $jwtService,
+        private readonly PasswordHasher $passwordHasher
     ) {
     }
 
@@ -34,11 +36,11 @@ final class AuthService
         }
 
         $id = $this->uuid();
-        $role = $request->username === 'admin' ? 'admin' : 'player';
+        $role = 'player';
         $this->db->insert('users', [
             'id' => $id,
             'username' => $request->username,
-            'password_hash' => hash('sha256', $request->password),
+            'password_hash' => $this->passwordHasher->hash($request->password),
             'role' => $role,
             'created_at' => gmdate(DATE_ATOM),
         ]);
@@ -64,8 +66,12 @@ final class AuthService
             ->setParameter('username', $request->username)
             ->fetchAssociative();
 
-        if ($row === false || $row['password_hash'] !== hash('sha256', $request->password)) {
+        if ($row === false || !$this->passwordHasher->verify($request->password, (string) $row['password_hash'])) {
             throw new RuntimeException('Invalid credentials');
+        }
+
+        if ($this->passwordHasher->needsRehash((string) $row['password_hash'])) {
+            $this->db->update('users', ['password_hash' => $this->passwordHasher->hash($request->password)], ['id' => $row['id']]);
         }
 
         return $this->tokenPayload((string) $row['id'], (string) $row['username'], (string) $row['role']);
@@ -93,7 +99,7 @@ final class AuthService
         }
 
         if ($request->password !== null) {
-            $updates['password_hash'] = hash('sha256', $request->password);
+            $updates['password_hash'] = $this->passwordHasher->hash($request->password);
         }
 
         if ($updates === []) {
