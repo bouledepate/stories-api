@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS cards (
 
 CREATE TABLE IF NOT EXISTS rooms (
   id TEXT PRIMARY KEY,
+  invite_code TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   owner_user_id TEXT NOT NULL,
   status TEXT NOT NULL,

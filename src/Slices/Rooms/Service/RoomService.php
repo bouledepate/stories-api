@@ -28,6 +28,7 @@ final class RoomService
 
         $this->db->insert('rooms', [
             'id' => $roomId,
+            'invite_code' => $this->generateInviteCode(),
             'name' => $request->name,
             'owner_user_id' => $actor->id,
             'status' => 'lobby',
@@ -59,6 +60,17 @@ final class RoomService
         );
 
         return $this->snapshot($roomId, $actor->id);
+    }
+
+    /** @return array<string, mixed> */
+    public function joinByInviteCode(string $inviteCode, AuthenticatedUser $actor, bool $spectator): array
+    {
+        $roomId = $this->db->fetchOne('SELECT id FROM rooms WHERE invite_code = ?', [$inviteCode]);
+        if ($roomId === false) {
+            throw new RuntimeException('Invite code not found');
+        }
+
+        return $this->join((string) $roomId, $actor, $spectator);
     }
 
     public function leave(string $roomId, AuthenticatedUser $actor): void
@@ -194,6 +206,7 @@ final class RoomService
             'roomId' => $room->id,
             'name' => $room->name,
             'ownerId' => $room->ownerUserId,
+            'inviteCode' => $room->inviteCode,
             'participants' => $participants,
         ];
 
@@ -221,7 +234,7 @@ final class RoomService
 
     private function requireRoom(string $roomId): RoomRecord
     {
-        $room = $this->db->fetchAssociative('SELECT id, name, owner_user_id, status FROM rooms WHERE id = ?', [$roomId]);
+        $room = $this->db->fetchAssociative('SELECT id, invite_code, name, owner_user_id, status FROM rooms WHERE id = ?', [$roomId]);
         if ($room === false) {
             throw new RuntimeException('Room not found');
         }
@@ -262,12 +275,31 @@ final class RoomService
     {
         return bin2hex(random_bytes(16));
     }
+
+    private function generateInviteCode(): string
+    {
+        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        for ($attempt = 0; $attempt < 8; $attempt++) {
+            $code = '';
+            for ($i = 0; $i < 6; $i++) {
+                $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+            }
+
+            $exists = $this->db->fetchOne('SELECT 1 FROM rooms WHERE invite_code = ?', [$code]);
+            if ($exists === false) {
+                return $code;
+            }
+        }
+
+        throw new RuntimeException('Failed to generate invite code');
+    }
 }
 
 final class RoomRecord
 {
     public function __construct(
         public readonly string $id,
+        public readonly string $inviteCode,
         public readonly string $name,
         public readonly string $ownerUserId,
         public readonly string $status
@@ -277,7 +309,7 @@ final class RoomRecord
     /** @param array<string, mixed> $row */
     public static function fromRow(array $row): self
     {
-        return new self((string) $row['id'], (string) $row['name'], (string) $row['owner_user_id'], (string) $row['status']);
+        return new self((string) $row['id'], (string) $row['invite_code'], (string) $row['name'], (string) $row['owner_user_id'], (string) $row['status']);
     }
 }
 

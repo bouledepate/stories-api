@@ -12,8 +12,10 @@ use Stories\Slices\Admin\Action\PatchCardAction;
 use Stories\Slices\Auth\Action\LoginAction;
 use Stories\Slices\Auth\Action\MeAction;
 use Stories\Slices\Auth\Action\RegisterAction;
+use Stories\Slices\Auth\Action\UpdateMeAction;
 use Stories\Slices\Rooms\Action\CreateRoomAction;
 use Stories\Slices\Rooms\Action\GetRoomStateAction;
+use Stories\Slices\Rooms\Action\JoinByInviteCodeAction;
 use Stories\Slices\Rooms\Action\JoinRoomAction;
 use Stories\Slices\Rooms\Action\LeaveRoomAction;
 use Stories\Slices\Rooms\Action\ReadyAction;
@@ -32,9 +34,11 @@ return static function (App $app): void {
     $app->post('/auth/register', RegisterAction::class);
     $app->post('/auth/login', LoginAction::class);
     $app->get('/auth/me', MeAction::class);
+    $app->patch('/auth/me', UpdateMeAction::class);
 
     $app->post('/rooms', CreateRoomAction::class);
     $app->post('/rooms/{roomId}/join', JoinRoomAction::class);
+    $app->post('/rooms/join-by-code', JoinByInviteCodeAction::class);
     $app->post('/rooms/{roomId}/leave', LeaveRoomAction::class);
     $app->post('/rooms/{roomId}/ready', ReadyAction::class);
     $app->post('/rooms/{roomId}/start', StartGameAction::class);

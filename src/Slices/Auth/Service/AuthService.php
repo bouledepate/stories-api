@@ -9,6 +9,7 @@ use RuntimeException;
 use Stories\Shared\Security\JwtService;
 use Stories\Slices\Auth\Dto\LoginRequest;
 use Stories\Slices\Auth\Dto\RegisterRequest;
+use Stories\Slices\Auth\Dto\UpdateProfileRequest;
 
 final class AuthService
 {
@@ -56,6 +57,33 @@ final class AuthService
         }
 
         return $this->tokenPayload((string) $row['id'], (string) $row['username'], (string) $row['role']);
+    }
+
+
+    /** @return array<string, mixed> */
+    public function updateProfile(string $userId, UpdateProfileRequest $request): array
+    {
+        $updates = [];
+
+        if ($request->username !== null) {
+            $exists = $this->db->fetchOne('SELECT id FROM users WHERE username = ? AND id <> ?', [$request->username, $userId]);
+            if ($exists !== false) {
+                throw new RuntimeException('Username already exists');
+            }
+            $updates['username'] = $request->username;
+        }
+
+        if ($request->password !== null) {
+            $updates['password_hash'] = hash('sha256', $request->password);
+        }
+
+        if ($updates === []) {
+            throw new RuntimeException('No fields to update');
+        }
+
+        $this->db->update('users', $updates, ['id' => $userId]);
+
+        return $this->me($userId);
     }
 
     /** @return array<string, mixed> */
