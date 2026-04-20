@@ -13,8 +13,7 @@ final class AuthContext
     {
     }
 
-    /** @return array<string, mixed> */
-    public function user(ServerRequestInterface $request): array
+    public function user(ServerRequestInterface $request): AuthenticatedUser
     {
         $header = $request->getHeaderLine('Authorization');
         if (!str_starts_with($header, 'Bearer ')) {
@@ -23,6 +22,6 @@ final class AuthContext
 
         $token = substr($header, 7);
 
-        return $this->jwtService->decode($token);
+        return AuthenticatedUser::fromClaims($this->jwtService->decode($token));
     }
 }

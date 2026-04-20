@@ -25,7 +25,7 @@ final class MeAction
         try {
             $user = $this->auth->user($request);
 
-            return $this->responder->respond($response, $this->service->me((string) $user['sub']));
+            return $this->responder->respond($response, $this->service->me($user->id));
         } catch (RuntimeException $exception) {
             return $this->responder->respond($response, ['error' => $exception->getMessage()], 401);
         }
