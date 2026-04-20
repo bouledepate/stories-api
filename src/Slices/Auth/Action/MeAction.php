@@ -27,7 +27,7 @@ final class MeAction
 
             return $this->responder->respond($response, $this->service->me($user->id));
         } catch (RuntimeException $exception) {
-            return $this->responder->respond($response, ['error' => $exception->getMessage()], 401);
+            return $this->responder->respondError($request, $response, $exception->getMessage(), 401);
         }
     }
 }

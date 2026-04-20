@@ -7,6 +7,10 @@ use Doctrine\DBAL\Connection;
 use Stories\Shared\Database\ConnectionFactory;
 use Stories\Shared\Security\JwtService;
 use Stories\Slices\Rooms\Service\RoomService;
+use Yiisoft\Translator\CategorySource;
+use Yiisoft\Translator\Message\Php\MessageSource;
+use Yiisoft\Translator\Translator;
+use Yiisoft\Translator\TranslatorInterface;
 use Yiisoft\Validator\Validator;
 
 return static function (array $env): ContainerBuilder {
@@ -24,6 +28,13 @@ return static function (array $env): ContainerBuilder {
         Connection::class => static fn (): Connection => ConnectionFactory::create($dbPath),
         JwtService::class => static fn (): JwtService => new JwtService($jwtSecret),
         Validator::class => static fn (): Validator => new Validator(),
+        TranslatorInterface::class => static function (): TranslatorInterface {
+            $translator = new Translator('en');
+            $source = new MessageSource(dirname(__DIR__) . '/messages');
+            $translator->addCategorySources(new CategorySource('app', $source));
+
+            return $translator;
+        },
         RoomService::class => DI\autowire()->constructorParameter('disconnectGraceSeconds', $disconnectGraceSeconds),
     ]);
 
