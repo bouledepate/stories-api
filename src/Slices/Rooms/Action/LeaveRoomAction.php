@@ -29,7 +29,7 @@ final class LeaveRoomAction
 
             return $this->responder->respond($response, ['status' => 'left', 'roomId' => $args['roomId']]);
         } catch (RuntimeException $exception) {
-            return $this->responder->respond($response, ['error' => $exception->getMessage()], 400);
+            return $this->responder->respondError($request, $response, $exception->getMessage(), 400);
         }
     }
 }

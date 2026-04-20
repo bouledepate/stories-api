@@ -63,6 +63,27 @@ npm run build
 
 Web UI entrypoint in API runtime: `GET /`.
 
+
+## API localization for errors
+
+Error responses support locale selection by request headers:
+- `Locale: ru|en`
+- `Language: ru|en`
+
+Priority: `Locale` -> `Language` -> default `en`.
+
+Error payload format:
+```json
+{
+  "error": "Localized message",
+  "errorCode": "MACHINE_READABLE_CODE"
+}
+```
+
+Response also includes `Content-Language` with the resolved locale.
+
+Translations are stored in PHP message files: `messages/en/app.php` and `messages/ru/app.php` (Yiisoft Translator).
+
 ## API docs
 
 - OpenAPI spec: `GET /openapi.yaml`

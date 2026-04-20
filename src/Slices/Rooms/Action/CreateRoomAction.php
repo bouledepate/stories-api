@@ -35,7 +35,7 @@ final class CreateRoomAction
 
             return $this->responder->respond($response, $this->service->create($dto, $actor), 201);
         } catch (InvalidArgumentException|RuntimeException $exception) {
-            return $this->responder->respond($response, ['error' => $exception->getMessage()], 400);
+            return $this->responder->respondError($request, $response, $exception->getMessage(), 400);
         }
     }
 }

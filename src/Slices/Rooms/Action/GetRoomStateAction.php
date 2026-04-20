@@ -28,7 +28,7 @@ final class GetRoomStateAction
 
             return $this->responder->respond($response, $this->service->state((string) $args['roomId'], $actor->id));
         } catch (RuntimeException $exception) {
-            return $this->responder->respond($response, ['error' => $exception->getMessage()], 400);
+            return $this->responder->respondError($request, $response, $exception->getMessage(), 400);
         }
     }
 }

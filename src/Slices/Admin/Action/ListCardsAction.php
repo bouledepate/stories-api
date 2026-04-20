@@ -32,7 +32,7 @@ final class ListCardsAction
 
             return $this->responder->respond($response, $this->service->cards($deck));
         } catch (RuntimeException $exception) {
-            return $this->responder->respond($response, ['error' => $exception->getMessage()], 403);
+            return $this->responder->respondError($request, $response, $exception->getMessage(), 403);
         }
     }
 }

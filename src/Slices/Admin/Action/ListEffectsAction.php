@@ -30,7 +30,7 @@ final class ListEffectsAction
 
             return $this->responder->respond($response, $this->service->effects());
         } catch (RuntimeException $exception) {
-            return $this->responder->respond($response, ['error' => $exception->getMessage()], 403);
+            return $this->responder->respondError($request, $response, $exception->getMessage(), 403);
         }
     }
 }
