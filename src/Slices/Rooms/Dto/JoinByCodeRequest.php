@@ -16,7 +16,8 @@ final class JoinByCodeRequest
         #[Regex('/^[A-Z0-9]{6}$/')]
         public readonly string $inviteCode,
 
-        public readonly bool $spectator
+        public readonly bool $spectator,
+        public readonly ?string $password
     ) {
     }
 
@@ -25,7 +26,8 @@ final class JoinByCodeRequest
     {
         return new self(
             strtoupper(trim((string) ($data['inviteCode'] ?? ''))),
-            (bool) ($data['spectator'] ?? false)
+            (bool) ($data['spectator'] ?? false),
+            ($password = trim((string) ($data['password'] ?? ''))) === '' ? null : $password
         );
     }
 }

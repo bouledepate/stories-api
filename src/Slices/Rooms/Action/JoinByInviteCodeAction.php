@@ -33,7 +33,7 @@ final class JoinByInviteCodeAction
             $dto = JoinByCodeRequest::fromArray($body);
             $this->validator->validate($dto);
 
-            return $this->responder->respond($response, $this->service->joinByInviteCode($dto->inviteCode, $actor, $dto->spectator));
+            return $this->responder->respond($response, $this->service->joinByInviteCode($dto->inviteCode, $actor, $dto->spectator, $dto->password));
         } catch (InvalidArgumentException|RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }

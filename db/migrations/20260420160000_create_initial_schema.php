@@ -44,6 +44,8 @@ final class CreateInitialSchema extends AbstractMigration
             ->addColumn('name', 'string', ['limit' => 128])
             ->addColumn('owner_user_id', 'string', ['limit' => 64])
             ->addColumn('status', 'string', ['limit' => 32])
+            ->addColumn('is_public', 'boolean', ['default' => true])
+            ->addColumn('password_hash', 'string', ['limit' => 255, 'null' => true])
             ->addColumn('created_at', 'string', ['limit' => 64])
             ->addIndex(['invite_code'], ['unique' => true])
             ->addForeignKey('owner_user_id', 'users', 'id')

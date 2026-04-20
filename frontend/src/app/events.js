@@ -123,7 +123,11 @@ export const bindHomeEvents = (render) => {
     try {
       state.activeRoom = await callApi('/rooms', {
         method: 'POST',
-        body: JSON.stringify({ name: safeTextValue('#roomName', 64) }),
+        body: JSON.stringify({
+          name: safeTextValue('#roomName', 64),
+          isPublic: Boolean(document.querySelector('#roomIsPublic')?.checked),
+          password: safeTextValue('#roomPassword', 128),
+        }),
       });
       setStatus('homeStatus', `${t('roomCreated')} ${state.activeRoom.inviteCode}`, true);
       render();
@@ -141,6 +145,7 @@ export const bindHomeEvents = (render) => {
         body: JSON.stringify({
           inviteCode: safeTextValue('#inviteCode', 6).toUpperCase(),
           spectator: Boolean(document.querySelector('#joinAsSpectator')?.checked),
+          password: safeTextValue('#joinPassword', 128),
         }),
       });
       setStatus('homeStatus', `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
@@ -199,6 +204,69 @@ export const bindHomeEvents = (render) => {
     } catch (e) {
       setStatus('homeStatus', e.message);
     }
+  });
+
+  document.querySelectorAll('[data-act="joinLobby"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!state.user) return openAuth(render, 'login');
+      const roomId = btn.dataset.roomId;
+      if (!roomId) return;
+
+      try {
+        const password = window.prompt(t('roomPassword')) || '';
+        state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}/join`, {
+          method: 'POST',
+          body: JSON.stringify({ spectator: false, password }),
+        });
+        state.activeTab = 'home';
+        setStatus('homeStatus', `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
+        render();
+      } catch (e) {
+        setStatus('homeStatus', e.message);
+      }
+    });
+  });
+};
+
+export const bindLobbyEvents = (render) => {
+  const loadLobbies = async () => {
+    try {
+      state.lobbyCatalog = (await callApi(
+        `/lobbies?visibility=${encodeURIComponent(state.lobbyFilters.visibility)}&password=${encodeURIComponent(state.lobbyFilters.password)}&limit=${state.lobbyFilters.limit}`
+      )).items || [];
+      setStatus('lobbyStatus', t('ready'), true);
+      render();
+    } catch (e) {
+      setStatus('lobbyStatus', e.message);
+    }
+  };
+
+  document.querySelector('[data-act="loadLobbies"]')?.addEventListener('click', async () => {
+    state.lobbyFilters.visibility = safeTextValue('#lobbyVisibility', 16) || 'all';
+    state.lobbyFilters.password = safeTextValue('#lobbyPasswordFilter', 20) || 'all';
+    state.lobbyFilters.limit = Number(safeTextValue('#lobbyLimit', 3) || '20');
+    await loadLobbies();
+  });
+
+  document.querySelectorAll('[data-act="joinLobby"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!state.user) return openAuth(render, 'login');
+      const roomId = btn.dataset.roomId;
+      if (!roomId) return;
+
+      try {
+        const password = window.prompt(t('roomPassword')) || '';
+        state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}/join`, {
+          method: 'POST',
+          body: JSON.stringify({ spectator: false, password }),
+        });
+        state.activeTab = 'home';
+        setStatus('homeStatus', `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
+        render();
+      } catch (e) {
+        setStatus('lobbyStatus', e.message);
+      }
+    });
   });
 };
 
