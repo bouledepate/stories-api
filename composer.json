@@ -3,7 +3,7 @@
   "description": "Stories board game API on PHP + Slim",
   "type": "project",
   "require": {
-    "php": ">=8.3",
+    "php": ">=8.4",
     "slim/slim": "^4.14",
     "slim/psr7": "^1.7",
     "doctrine/dbal": "^4.0",

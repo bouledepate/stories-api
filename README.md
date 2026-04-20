@@ -121,6 +121,7 @@ The app auto-loads `.env` from project root if present.
 - `DB_DRIVER` (`sqlite` by default; `pgsql` for PostgreSQL)
 - `DB_PATH` (used when `DB_DRIVER=sqlite`, default: `var/data.sqlite`)
 - `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` (used when `DB_DRIVER=pgsql`)
+- `STORIES_DB_HOST` (Compose-only override for container DB hostname; default: `postgres`)
 - `REDIS_ENABLED` (`0` by default)
 - `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`, `REDIS_PASSWORD` (Redis integration scaffold)
 - `JWT_SECRET` (default: `change-me`)

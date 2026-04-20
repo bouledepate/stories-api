@@ -7,7 +7,7 @@ services:
     environment:
       DB_DRIVER: ${DB_DRIVER:-sqlite}
       DB_PATH: ${DB_PATH:-/app/var/data.sqlite}
-      DB_HOST: ${DB_HOST:-postgres}
+      DB_HOST: ${STORIES_DB_HOST:-postgres}
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME:-stories}
       DB_USER: ${DB_USER:-stories}
@@ -22,8 +22,10 @@ services:
     volumes:
       - ./var:/app/var
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   ws:
     build: .
@@ -33,6 +35,13 @@ services:
     environment:
       WS_HOST: 0.0.0.0
       WS_PORT: 8081
+      DB_DRIVER: ${DB_DRIVER:-sqlite}
+      DB_PATH: ${DB_PATH:-/app/var/data.sqlite}
+      DB_HOST: ${STORIES_DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-stories}
+      DB_USER: ${DB_USER:-stories}
+      DB_PASSWORD: ${DB_PASSWORD:-stories}
     depends_on:
       - api
 
@@ -42,6 +51,11 @@ services:
       POSTGRES_DB: stories
       POSTGRES_USER: stories
       POSTGRES_PASSWORD: stories
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stories -d stories"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
