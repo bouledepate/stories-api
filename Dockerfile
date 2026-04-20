@@ -3,7 +3,7 @@ FROM php:8.3-cli
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y libsqlite3-dev unzip git \
-    && docker-php-ext-install sqlite3 \
+    && docker-php-ext-install pdo_sqlite \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . /app
