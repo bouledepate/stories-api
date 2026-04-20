@@ -34,6 +34,7 @@ export const renderAuthModal = () => {
 
 const renderHero = () => `
   <section class="hero">
+    <div class="hero-mist" aria-hidden="true"></div>
     <div class="hero-copy">
       <span class="hero-kicker">${t('appTag')}</span>
       <h1>LETTERS:<br/>NO MERCY</h1>
@@ -77,22 +78,34 @@ const renderLobbyRooms = () => {
   `;
 };
 
-const renderLandingFeatures = () => `
-  <section class="feature-strip">
-    <article>
-      <h4>БЛЕФ И СТРАТЕГИЯ</h4>
-      <p>Скрывайте свои намерения и читайте других.</p>
-    </article>
-    <article>
-      <h4>УНИКАЛЬНЫЕ ПЕРСОНАЖИ</h4>
-      <p>Каждый со своими способностями и тайными целями.</p>
-    </article>
-    <article>
-      <h4>ТЁМНОЕ СРЕДНЕВЕКОВЬЕ</h4>
-      <p>Атмосфера интриг, предательства и власти.</p>
-    </article>
-  </section>
-`;
+const renderHomeActions = () => {
+  if (!state.user) {
+    return `<section class="lobby-quick-actions"><p>${t('authRequiredAction')}</p></section>`;
+  }
+
+  return `
+    <section class="lobby-quick-actions">
+      <article>
+        <h3>${t('createRoom')}</h3>
+        <div class="stack">
+          <input id="roomName" placeholder="${t('roomName')}" />
+          <label><input id="roomIsPublic" type="checkbox" checked /> ${t('visibilityPublic')}</label>
+          <input id="roomPassword" placeholder="${t('roomPassword')}" type="password" />
+          <button class="primary" data-act="createRoom">${t('createRoom')}</button>
+        </div>
+      </article>
+      <article>
+        <h3>${t('connectCode')}</h3>
+        <div class="stack">
+          <input id="inviteCode" placeholder="AB12CD" maxlength="6" />
+          <input id="joinPassword" placeholder="${t('roomPassword')}" type="password" />
+          <label><input id="joinAsSpectator" type="checkbox" /> ${t('spectator')}</label>
+          <button class="secondary" data-act="joinByCode">${t('connect')}</button>
+        </div>
+      </article>
+    </section>
+  `;
+};
 
 const renderParticipant = (participant) => {
   const me = state.user?.id === participant.userId;
@@ -144,36 +157,11 @@ const renderRoomPanel = () => {
 };
 
 export const renderHome = () => {
-  const actions = state.user
-    ? `
-      <div class="grid">
-        <article>
-          <h3>${t('createRoom')}</h3>
-          <div class="stack">
-            <input id="roomName" placeholder="${t('roomName')}" />
-            <label><input id="roomIsPublic" type="checkbox" checked /> ${t('visibilityPublic')}</label>
-            <input id="roomPassword" placeholder="${t('roomPassword')}" type="password" />
-            <button class="primary" data-act="createRoom">${t('createRoom')}</button>
-          </div>
-        </article>
-        <article>
-          <h3>${t('connectCode')}</h3>
-          <div class="stack">
-            <input id="inviteCode" placeholder="AB12CD" maxlength="6" />
-            <input id="joinPassword" placeholder="${t('roomPassword')}" type="password" />
-            <label><input id="joinAsSpectator" type="checkbox" /> ${t('spectator')}</label>
-            <button class="secondary" data-act="joinByCode">${t('connect')}</button>
-          </div>
-        </article>
-      </div>`
-    : `<article><p>${t('authRequiredAction')}</p></article>`;
-
   return `
     ${renderHero()}
     ${renderLobbyRooms()}
-    ${renderLandingFeatures()}
+    ${renderHomeActions()}
     <div id="homeStatus" class="status">${t('ready')}</div>
-    ${actions}
     ${renderRoomPanel()}
   `;
 };
@@ -347,9 +335,9 @@ export const renderLayout = () => {
       ${state.user?.role === 'admin' ? `<button class="tab ${state.activeTab === 'control' ? 'active' : ''}" data-tab="control">${t('navControl')}</button>` : ''}
     </nav>
 
-    <section class="panel ${state.activeTab === 'home' ? '' : 'hidden'}">${renderHome()}</section>
-    <section class="panel ${state.activeTab === 'lobbies' ? '' : 'hidden'}">${renderLobbies()}</section>
-    <section class="panel ${state.activeTab === 'profile' ? '' : 'hidden'}">${renderProfile()}</section>
+    <section class="panel ${state.activeTab === 'home' ? '' : 'hidden'} cinematic-panel">${renderHome()}</section>
+    <section class="panel ${state.activeTab === 'lobbies' ? '' : 'hidden'} cinematic-panel">${renderLobbies()}</section>
+    <section class="panel ${state.activeTab === 'profile' ? '' : 'hidden'} cinematic-panel">${renderProfile()}</section>
     ${state.user?.role === 'admin' ? `<section class="panel ${state.activeTab === 'control' ? '' : 'hidden'}">${renderControlPanel()}</section>` : ''}
 
     ${renderAuthModal()}
