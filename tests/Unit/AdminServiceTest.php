@@ -11,9 +11,24 @@ use Stories\Tests\Support\TestDatabase;
 
 final class AdminServiceTest extends TestCase
 {
+    private function seedCard(\Doctrine\DBAL\Connection $db): void
+    {
+        $db->insert('cards', [
+            'deck' => 'character',
+            'code' => 'guard',
+            'name' => 'Guard',
+            'text' => 'Guess and eliminate.',
+            'value' => 1,
+            'effect_key' => 'guard',
+            'enabled' => 1,
+            'version' => 1,
+        ]);
+    }
+
     public function testCardsReturnsDeckAndNormalizedCards(): void
     {
         $db = TestDatabase::create();
+        $this->seedCard($db);
         $service = new AdminService($db);
 
         $result = $service->cards('character');
@@ -26,6 +41,7 @@ final class AdminServiceTest extends TestCase
     public function testPatchUpdatesCardVersionAndFields(): void
     {
         $db = TestDatabase::create();
+        $this->seedCard($db);
         $service = new AdminService($db);
 
         $response = $service->patch('character', 'guard', new PatchCardRequest([

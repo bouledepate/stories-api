@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Stories\Tests\Support;
 
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Exception;
 use Stories\Shared\Database\ConnectionFactory;
 
 final class TestDatabase
@@ -17,27 +16,51 @@ final class TestDatabase
             throw new \RuntimeException('Cannot create temporary database path');
         }
 
-        $db = ConnectionFactory::create($path);
-        self::migrate($db);
+        self::migrate($path);
 
-        return $db;
+        return ConnectionFactory::create([
+            'DB_DRIVER' => 'sqlite',
+            'DB_PATH' => $path,
+        ]);
     }
 
-    private static function migrate(Connection $db): void
+    private static function migrate(string $dbPath): void
     {
-        foreach (glob(__DIR__ . '/../../migrations/*.sql') ?: [] as $file) {
-            $sql = file_get_contents((string) $file);
-            if (!is_string($sql)) {
-                throw new \RuntimeException('Cannot read migration file');
-            }
+        $rootDir = dirname(__DIR__, 2);
+        $env = [
+            'DB_DRIVER' => 'sqlite',
+            'DB_PATH' => $dbPath,
+        ];
 
-            try {
-                $db->executeStatement($sql);
-            } catch (Exception $e) {
-                if (!str_contains($e->getMessage(), 'duplicate column name: invite_code')) {
-                    throw $e;
-                }
-            }
+        $cmd = escapeshellarg(PHP_BINARY)
+            . ' '
+            . escapeshellarg($rootDir . '/vendor/bin/phinx')
+            . ' migrate -c '
+            . escapeshellarg($rootDir . '/phinx.php')
+            . ' -e sqlite';
+
+        $proc = proc_open($cmd, [
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, $rootDir, $env);
+
+        if (!\is_resource($proc)) {
+            throw new \RuntimeException('Unable to start migration process for tests');
+        }
+
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        $exitCode = proc_close($proc);
+        if ($exitCode !== 0) {
+            throw new \RuntimeException(sprintf(
+                "Test migrations failed with code %d\nstdout: %s\nstderr: %s",
+                $exitCode,
+                $stdout ?: '-',
+                $stderr ?: '-'
+            ));
         }
     }
 }
