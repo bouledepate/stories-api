@@ -109,6 +109,14 @@ export const bindAuthEvents = async (render, loadMe) => {
 };
 
 export const bindHomeEvents = (render) => {
+  const requireRoom = () => {
+    if (!state.activeRoom?.roomId) {
+      setStatus('homeStatus', t('roomNotFound'));
+      return false;
+    }
+    return true;
+  };
+
   document.querySelector('[data-act="createRoom"]')?.addEventListener('click', async () => {
     if (!state.user) return openAuth(render, 'login');
 
@@ -141,21 +149,89 @@ export const bindHomeEvents = (render) => {
       setStatus('homeStatus', e.message);
     }
   });
+
+  document.querySelector('[data-act="refreshRoom"]')?.addEventListener('click', async () => {
+    if (!requireRoom()) return;
+    try {
+      state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}`);
+      setStatus('homeStatus', t('ready'), true);
+      render();
+    } catch (e) {
+      setStatus('homeStatus', e.message);
+    }
+  });
+
+  document.querySelector('[data-act="readyRoom"]')?.addEventListener('click', async () => {
+    if (!requireRoom()) return;
+    try {
+      state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/ready`, {
+        method: 'POST',
+      });
+      setStatus('homeStatus', t('ready'), true);
+      render();
+    } catch (e) {
+      setStatus('homeStatus', e.message);
+    }
+  });
+
+  document.querySelector('[data-act="startGame"]')?.addEventListener('click', async () => {
+    if (!requireRoom()) return;
+    try {
+      state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/start`, {
+        method: 'POST',
+      });
+      setStatus('homeStatus', t('ready'), true);
+      render();
+    } catch (e) {
+      setStatus('homeStatus', e.message);
+    }
+  });
+
+  document.querySelector('[data-act="leaveRoom"]')?.addEventListener('click', async () => {
+    if (!requireRoom()) return;
+    try {
+      await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/leave`, {
+        method: 'POST',
+      });
+      state.activeRoom = null;
+      setStatus('homeStatus', t('ready'), true);
+      render();
+    } catch (e) {
+      setStatus('homeStatus', e.message);
+    }
+  });
 };
 
 export const bindProfileEvents = (render) => {
   document.querySelector('[data-act="saveProfile"]')?.addEventListener('click', async () => {
     try {
       const username = safeTextValue('#profileUsername', 64);
-      const password = safeTextValue('#profilePassword', 128);
       const payload = { username };
-      if (password) payload.password = password;
       state.user = await callApi('/auth/me', {
         method: 'PATCH',
         body: JSON.stringify(payload),
       });
       setStatus('profileStatus', t('profileUpdated'), true);
       render();
+    } catch (e) {
+      setStatus('profileStatus', e.message);
+    }
+  });
+
+  document.querySelector('[data-act="changePassword"]')?.addEventListener('click', async () => {
+    try {
+      await callApi('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({
+          currentPassword: safeTextValue('#currentPassword', 128),
+          newPassword: safeTextValue('#nextPassword', 128),
+        }),
+      });
+      const currentField = document.querySelector('#currentPassword');
+      const nextField = document.querySelector('#nextPassword');
+      if (currentField) currentField.value = '';
+      if (nextField) nextField.value = '';
+      setStatus('profileStatus', t('passwordChanged'), true);
     } catch (e) {
       setStatus('profileStatus', e.message);
     }

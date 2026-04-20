@@ -40,7 +40,7 @@ final class SubmitAction
                 'state' => $this->service->state((string) $args['roomId'], $actor->id),
             ]);
         } catch (InvalidArgumentException|RuntimeException $exception) {
-            return $this->responder->respondError($request, $response, $exception->getMessage(), 400);
+            return $this->responder->respondError($request, $response, $exception, 400);
         }
     }
 }

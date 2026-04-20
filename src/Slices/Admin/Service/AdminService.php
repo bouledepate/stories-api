@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Stories\Slices\Admin\Service;
 
 use Doctrine\DBAL\Connection;
-use RuntimeException;
+use Stories\Shared\Exception\ApiException;
+use Stories\Shared\Http\ApiErrorCode;
 use Stories\Slices\Admin\Dto\PatchCardRequest;
 
 final class AdminService
@@ -19,7 +20,7 @@ final class AdminService
     {
         $allowed = ['character', 'decree', 'event'];
         if (!in_array($deck, $allowed, true)) {
-            throw new RuntimeException('Deck not found');
+            throw new ApiException(ApiErrorCode::DECK_NOT_FOUND);
         }
 
         $cards = $this->db->createQueryBuilder()
@@ -45,7 +46,7 @@ final class AdminService
             ->setParameter('code', $cardCode)
             ->fetchAssociative();
         if ($card === false) {
-            throw new RuntimeException('Card not found');
+            throw new ApiException(ApiErrorCode::CARD_NOT_FOUND);
         }
 
         $updates = [];

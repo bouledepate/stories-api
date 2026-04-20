@@ -35,7 +35,7 @@ final class UpdateMeAction
 
             return $this->responder->respond($response, $this->service->updateProfile($user->id, $dto));
         } catch (InvalidArgumentException|RuntimeException $exception) {
-            return $this->responder->respondError($request, $response, $exception->getMessage(), 400);
+            return $this->responder->respondError($request, $response, $exception, 400);
         }
     }
 }

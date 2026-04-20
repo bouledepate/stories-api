@@ -6,7 +6,8 @@ namespace Stories\Slices\Admin\Action;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use RuntimeException;
+use Stories\Shared\Exception\ApiException;
+use Stories\Shared\Http\ApiErrorCode;
 use Stories\Shared\Http\JsonResponder;
 use Stories\Shared\Security\AuthContext;
 use Stories\Slices\Admin\Service\AdminService;
@@ -25,14 +26,14 @@ final class ListCardsAction
         try {
             $actor = $this->auth->user($request);
             if ($actor->role !== 'admin') {
-                throw new RuntimeException('Admin role required');
+                throw new ApiException(ApiErrorCode::ADMIN_ROLE_REQUIRED);
             }
 
             $deck = (string) ($request->getQueryParams()['deck'] ?? '');
 
             return $this->responder->respond($response, $this->service->cards($deck));
-        } catch (RuntimeException $exception) {
-            return $this->responder->respondError($request, $response, $exception->getMessage(), 403);
+        } catch (\Throwable $exception) {
+            return $this->responder->respondError($request, $response, $exception, 403);
         }
     }
 }

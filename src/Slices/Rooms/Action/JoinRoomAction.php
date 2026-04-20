@@ -29,7 +29,7 @@ final class JoinRoomAction
 
             return $this->responder->respond($response, $this->service->join((string) $args['roomId'], $actor, $spectator));
         } catch (RuntimeException $exception) {
-            return $this->responder->respondError($request, $response, $exception->getMessage(), 400);
+            return $this->responder->respondError($request, $response, $exception, 400);
         }
     }
 }

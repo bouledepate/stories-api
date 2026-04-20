@@ -46,6 +46,55 @@ const renderHero = () => `
   </section>
 `;
 
+const renderParticipant = (participant) => {
+  const me = state.user?.id === participant.userId;
+  return `
+    <li class="participant-item">
+      <div>
+        <b>${esc(participant.username)}</b> ${me ? `<span class="inline-note">(${t('youLabel')})</span>` : ''}
+      </div>
+      <div class="participant-meta">${esc(participant.role)} · ${participant.ready ? 'ready' : 'not ready'}</div>
+    </li>
+  `;
+};
+
+const renderRoomPanel = () => {
+  if (!state.activeRoom) return '';
+
+  const participants = Array.isArray(state.activeRoom.participants) ? state.activeRoom.participants : [];
+  const players = participants.filter((participant) => participant.role !== 'spectator');
+  const spectators = participants.filter((participant) => participant.role === 'spectator');
+
+  return `
+    <article class="room-panel">
+      <h3>${t('roomDetails')}</h3>
+      <div class="room-meta">
+        <div><span>${t('roomCode')}:</span> <b>${esc(state.activeRoom.inviteCode || '—')}</b></div>
+        <div><span>${t('roomOwner')}:</span> <b>${esc(state.activeRoom.ownerId || '—')}</b></div>
+      </div>
+      <div class="room-lists">
+        <div>
+          <h4>${t('roomParticipants')} (${players.length})</h4>
+          <ul class="participant-list">${players.map(renderParticipant).join('')}</ul>
+        </div>
+        <div>
+          <h4>${t('roomSpectators')} (${spectators.length})</h4>
+          <ul class="participant-list">${spectators.map(renderParticipant).join('')}</ul>
+        </div>
+      </div>
+      <div class="stack">
+        <h4>${t('roomActions')}</h4>
+        <div class="room-actions">
+          <button class="secondary" data-act="refreshRoom">${t('refreshRoom')}</button>
+          <button class="secondary" data-act="readyRoom">${t('markReady')}</button>
+          <button class="primary" data-act="startGame">${t('startGame')}</button>
+          <button class="chip" data-act="leaveRoom">${t('leaveRoom')}</button>
+        </div>
+      </div>
+    </article>
+  `;
+};
+
 export const renderHome = () => {
   const actions = state.user
     ? `
@@ -72,7 +121,7 @@ export const renderHome = () => {
     ${renderHero()}
     <div id="homeStatus" class="status">${t('ready')}</div>
     ${actions}
-    ${state.activeRoom ? `<pre class="json">${esc(JSON.stringify(state.activeRoom, null, 2))}</pre>` : ''}
+    ${renderRoomPanel()}
   `;
 };
 
@@ -86,8 +135,15 @@ export const renderProfile = () => {
         <h3>${t('profileEdit')}</h3>
         <div class="stack">
           <input id="profileUsername" value="${esc(state.user.username)}" />
-          <input id="profilePassword" placeholder="${t('newPassword')}" type="password" />
           <button class="primary" data-act="saveProfile">${t('saveProfile')}</button>
+        </div>
+      </article>
+      <article>
+        <h3>${t('changePassword')}</h3>
+        <div class="stack">
+          <input id="currentPassword" placeholder="${t('currentPassword')}" type="password" />
+          <input id="nextPassword" placeholder="${t('nextPassword')}" type="password" />
+          <button class="secondary" data-act="changePassword">${t('changePassword')}</button>
         </div>
       </article>
       <article>

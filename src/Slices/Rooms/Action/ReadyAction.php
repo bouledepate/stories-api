@@ -36,7 +36,7 @@ final class ReadyAction
 
             return $this->responder->respond($response, $this->service->ready((string) $args['roomId'], $actor, (bool) $dto->ready));
         } catch (InvalidArgumentException|RuntimeException $exception) {
-            return $this->responder->respondError($request, $response, $exception->getMessage(), 400);
+            return $this->responder->respondError($request, $response, $exception, 400);
         }
     }
 }

@@ -12,6 +12,7 @@ use Stories\Slices\Admin\Action\PatchCardAction;
 use Stories\Slices\Auth\Action\LoginAction;
 use Stories\Slices\Auth\Action\MeAction;
 use Stories\Slices\Auth\Action\RegisterAction;
+use Stories\Slices\Auth\Action\ChangePasswordAction;
 use Stories\Slices\Auth\Action\UpdateMeAction;
 use Stories\Slices\Rooms\Action\CreateRoomAction;
 use Stories\Slices\Rooms\Action\GetRoomStateAction;
@@ -35,6 +36,7 @@ return static function (App $app): void {
     $app->post('/auth/login', LoginAction::class);
     $app->get('/auth/me', MeAction::class);
     $app->patch('/auth/me', UpdateMeAction::class);
+    $app->post('/auth/change-password', ChangePasswordAction::class);
 
     $app->post('/rooms', CreateRoomAction::class);
     $app->post('/rooms/{roomId}/join', JoinRoomAction::class);

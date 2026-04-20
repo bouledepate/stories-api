@@ -32,7 +32,7 @@ final class LoginAction
 
             return $this->responder->respond($response, $this->service->login($dto));
         } catch (InvalidArgumentException|RuntimeException $exception) {
-            return $this->responder->respondError($request, $response, $exception->getMessage(), 401);
+            return $this->responder->respondError($request, $response, $exception, 401);
         }
     }
 }

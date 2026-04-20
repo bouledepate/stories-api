@@ -4,15 +4,20 @@ declare(strict_types=1);
 
 namespace Stories\Shared\Http;
 
+use Psr\Log\LoggerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Throwable;
 use Yiisoft\Translator\TranslatorInterface;
 
 final class JsonResponder
 {
     private const DEFAULT_LOCALE = 'en';
 
-    public function __construct(private readonly TranslatorInterface $translator)
+    public function __construct(
+        private readonly TranslatorInterface $translator,
+        private readonly LoggerInterface $logger
+    )
     {
     }
 
@@ -30,11 +35,24 @@ final class JsonResponder
     public function respondError(
         ServerRequestInterface $request,
         ResponseInterface $response,
-        string $message,
+        Throwable $error,
         int $status
     ): ResponseInterface {
         $locale = $this->resolveLocale($request);
-        $code = ApiErrorCode::fromMessage($message);
+        $code = ApiErrorCode::fromThrowable($error);
+        $auth = $request->getAttribute('auth');
+        $userId = (is_object($auth) && property_exists($auth, 'id') && is_string($auth->id)) ? $auth->id : null;
+
+        $this->logger->error('http.respond_error', [
+            'method' => $request->getMethod(),
+            'path' => $request->getUri()->getPath(),
+            'status' => $status,
+            'errorCode' => $code->value,
+            'errorMessage' => $error->getMessage(),
+            'errorClass' => $error::class,
+            'locale' => $locale,
+            'userId' => $userId,
+        ]);
 
         return $this->respond($response, [
             'error' => $this->translator->translate('error.' . $code->value, category: 'app', locale: $locale),

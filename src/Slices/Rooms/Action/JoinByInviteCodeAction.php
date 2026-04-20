@@ -35,7 +35,7 @@ final class JoinByInviteCodeAction
 
             return $this->responder->respond($response, $this->service->joinByInviteCode($dto->inviteCode, $actor, $dto->spectator));
         } catch (InvalidArgumentException|RuntimeException $exception) {
-            return $this->responder->respondError($request, $response, $exception->getMessage(), 400);
+            return $this->responder->respondError($request, $response, $exception, 400);
         }
     }
 }
