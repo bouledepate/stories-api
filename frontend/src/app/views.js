@@ -34,15 +34,68 @@ export const renderAuthModal = () => {
 
 const renderHero = () => `
   <section class="hero">
-    <div>
-      <span class="badge">${t('appTag')}</span>
-      <h1>${t('heroTitle')}</h1>
+    <div class="hero-copy">
+      <span class="hero-kicker">${t('appTag')}</span>
+      <h1>LETTERS:<br/>NO MERCY</h1>
+      <p class="hero-subline">DARK MEDIEVAL STORIES</p>
       <p>${t('heroSubtitle')}</p>
+      <div class="hero-actions">
+        <button class="primary" data-act="heroCreate">＋ ${t('heroCreate')}</button>
+        <button class="secondary" data-act="heroJoin">${t('heroJoin')}</button>
+      </div>
     </div>
-    <div class="hero-actions">
-      <button class="primary" data-act="heroCreate">${t('heroCreate')}</button>
-      <button class="secondary" data-act="heroJoin">${t('heroJoin')}</button>
+    <div class="hero-art" aria-hidden="true">
+      <div class="castle-silhouette"></div>
+      <div class="letter-token"></div>
     </div>
+  </section>
+`;
+
+const renderLobbyRooms = () => {
+  const rooms = [
+    { icon: '♛', name: 'Трон под подозрением', mode: 'Стандартные правила', players: '6 / 8', isNew: true },
+    { icon: '⚜', name: 'Шёпот в темноте', mode: 'Короткая партия', players: '4 / 8', isNew: false },
+    { icon: '⚔', name: 'Заговор в крепости', mode: 'Стандартные правила', players: '7 / 8', isNew: false },
+    { icon: '✉', name: 'Письмо без отправителя', mode: 'Короткая партия', players: '3 / 8', isNew: false },
+  ];
+
+  return `
+    <section class="lobby-card">
+      <div class="lobby-head">
+        <h3>ДОСТУПНЫЕ КОМНАТЫ</h3>
+        <button class="chip">ФИЛЬТРЫ</button>
+      </div>
+      <div class="lobby-list">
+        ${rooms.map((room) => `
+          <article class="lobby-item">
+            <div class="lobby-icon">${room.icon}</div>
+            <div class="lobby-meta">
+              <h4>${room.name} ${room.isNew ? '<span class="inline-tag">НОВАЯ</span>' : ''}</h4>
+              <p>5–8 игроков • ${room.mode}</p>
+            </div>
+            <div class="lobby-count">👥 ${room.players}</div>
+            <button class="secondary" data-act="heroJoin">ПРИСОЕДИНИТЬСЯ</button>
+          </article>
+        `).join('')}
+      </div>
+    </section>
+  `;
+};
+
+const renderLandingFeatures = () => `
+  <section class="feature-strip">
+    <article>
+      <h4>БЛЕФ И СТРАТЕГИЯ</h4>
+      <p>Скрывайте свои намерения и читайте других.</p>
+    </article>
+    <article>
+      <h4>УНИКАЛЬНЫЕ ПЕРСОНАЖИ</h4>
+      <p>Каждый со своими способностями и тайными целями.</p>
+    </article>
+    <article>
+      <h4>ТЁМНОЕ СРЕДНЕВЕКОВЬЕ</h4>
+      <p>Атмосфера интриг, предательства и власти.</p>
+    </article>
   </section>
 `;
 
@@ -119,6 +172,8 @@ export const renderHome = () => {
 
   return `
     ${renderHero()}
+    ${renderLobbyRooms()}
+    ${renderLandingFeatures()}
     <div id="homeStatus" class="status">${t('ready')}</div>
     ${actions}
     ${renderRoomPanel()}
@@ -233,7 +288,8 @@ export const renderLayout = () => {
   <main class="layout ${state.theme}">
     <header class="topbar">
       <div class="brand">
-        <h2>${t('title')}</h2>
+        <h2>LETTERS: NO MERCY</h2>
+        <p class="brand-sub">Dark Medieval Stories</p>
         ${userBlock}
       </div>
       <div class="topbar-actions">
