@@ -9,6 +9,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use RuntimeException;
 use Stories\Shared\Http\JsonResponder;
+use Stories\Shared\Validation\InputValidator;
 use Stories\Slices\Auth\Dto\LoginRequest;
 use Stories\Slices\Auth\Service\AuthService;
 
@@ -16,7 +17,8 @@ final class LoginAction
 {
     public function __construct(
         private readonly AuthService $service,
-        private readonly JsonResponder $responder
+        private readonly JsonResponder $responder,
+        private readonly InputValidator $validator
     ) {
     }
 
@@ -26,6 +28,7 @@ final class LoginAction
             /** @var array<string, mixed> $body */
             $body = (array) $request->getParsedBody();
             $dto = LoginRequest::fromArray($body);
+            $this->validator->validate($dto);
 
             return $this->responder->respond($response, $this->service->login($dto));
         } catch (InvalidArgumentException|RuntimeException $exception) {

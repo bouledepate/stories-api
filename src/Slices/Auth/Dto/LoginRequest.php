@@ -4,12 +4,21 @@ declare(strict_types=1);
 
 namespace Stories\Slices\Auth\Dto;
 
-use InvalidArgumentException;
+use Yiisoft\Validator\Rule\Length;
+use Yiisoft\Validator\Rule\Required;
+use Yiisoft\Validator\Rule\StringValue;
 
 final class LoginRequest
 {
     public function __construct(
+        #[Required]
+        #[StringValue]
+        #[Length(min: 1)]
         public readonly string $username,
+
+        #[Required]
+        #[StringValue]
+        #[Length(min: 1)]
         public readonly string $password
     ) {
     }
@@ -17,13 +26,9 @@ final class LoginRequest
     /** @param array<string, mixed> $data */
     public static function fromArray(array $data): self
     {
-        $username = trim((string) ($data['username'] ?? ''));
-        $password = (string) ($data['password'] ?? '');
-
-        if ($username === '' || $password === '') {
-            throw new InvalidArgumentException('username and password are required');
-        }
-
-        return new self($username, $password);
+        return new self(
+            trim((string) ($data['username'] ?? '')),
+            (string) ($data['password'] ?? '')
+        );
     }
 }

@@ -65,7 +65,12 @@ final class RoomService
     /** @return array<string, mixed> */
     public function joinByInviteCode(string $inviteCode, AuthenticatedUser $actor, bool $spectator): array
     {
-        $roomId = $this->db->fetchOne('SELECT id FROM rooms WHERE invite_code = ?', [$inviteCode]);
+        $roomId = $this->db->createQueryBuilder()
+            ->select('r.id')
+            ->from('rooms', 'r')
+            ->where('r.invite_code = :inviteCode')
+            ->setParameter('inviteCode', $inviteCode)
+            ->fetchOne();
         if ($roomId === false) {
             throw new RuntimeException('Invite code not found');
         }
@@ -234,7 +239,12 @@ final class RoomService
 
     private function requireRoom(string $roomId): RoomRecord
     {
-        $room = $this->db->fetchAssociative('SELECT id, invite_code, name, owner_user_id, status FROM rooms WHERE id = ?', [$roomId]);
+        $room = $this->db->createQueryBuilder()
+            ->select('r.id', 'r.invite_code', 'r.name', 'r.owner_user_id', 'r.status')
+            ->from('rooms', 'r')
+            ->where('r.id = :roomId')
+            ->setParameter('roomId', $roomId)
+            ->fetchAssociative();
         if ($room === false) {
             throw new RuntimeException('Room not found');
         }
@@ -285,7 +295,12 @@ final class RoomService
                 $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
             }
 
-            $exists = $this->db->fetchOne('SELECT 1 FROM rooms WHERE invite_code = ?', [$code]);
+            $exists = $this->db->createQueryBuilder()
+                ->select('1')
+                ->from('rooms', 'r')
+                ->where('r.invite_code = :inviteCode')
+                ->setParameter('inviteCode', $code)
+                ->fetchOne();
             if ($exists === false) {
                 return $code;
             }

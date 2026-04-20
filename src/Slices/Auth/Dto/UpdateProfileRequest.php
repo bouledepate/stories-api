@@ -4,12 +4,20 @@ declare(strict_types=1);
 
 namespace Stories\Slices\Auth\Dto;
 
-use InvalidArgumentException;
+use Yiisoft\Validator\Rule\FilledAtLeast;
+use Yiisoft\Validator\Rule\Length;
+use Yiisoft\Validator\Rule\StringValue;
 
+#[FilledAtLeast(['username', 'password'])]
 final class UpdateProfileRequest
 {
     public function __construct(
+        #[StringValue(skipOnEmpty: true)]
+        #[Length(min: 3, max: 32, skipOnEmpty: true)]
         public readonly ?string $username,
+
+        #[StringValue(skipOnEmpty: true)]
+        #[Length(min: 6, skipOnEmpty: true)]
         public readonly ?string $password
     ) {
     }
@@ -19,16 +27,6 @@ final class UpdateProfileRequest
     {
         $username = array_key_exists('username', $data) ? trim((string) $data['username']) : null;
         $password = array_key_exists('password', $data) ? (string) $data['password'] : null;
-
-        if ($username !== null && (mb_strlen($username) < 3 || mb_strlen($username) > 32)) {
-            throw new InvalidArgumentException('username must be 3..32 chars');
-        }
-        if ($password !== null && mb_strlen($password) < 6) {
-            throw new InvalidArgumentException('password must be at least 6 chars');
-        }
-        if ($username === null && $password === null) {
-            throw new InvalidArgumentException('No fields to update');
-        }
 
         return new self($username, $password);
     }

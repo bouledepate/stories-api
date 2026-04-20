@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace Stories\Slices\Rooms\Dto;
 
-use InvalidArgumentException;
+use Yiisoft\Validator\Rule\In;
+use Yiisoft\Validator\Rule\Required;
+use Yiisoft\Validator\Rule\StringValue;
 
 final class ActionRequest
 {
     public function __construct(
+        #[Required]
+        #[StringValue]
+        #[In(['draw_character', 'play_character', 'pass_turn'])]
         public readonly string $actionType,
+
         public readonly ?string $cardCode
     ) {
     }
@@ -17,14 +23,11 @@ final class ActionRequest
     /** @param array<string, mixed> $data */
     public static function fromArray(array $data): self
     {
-        $actionType = (string) ($data['actionType'] ?? '');
-        $allowed = ['draw_character', 'play_character', 'pass_turn'];
-        if (!in_array($actionType, $allowed, true)) {
-            throw new InvalidArgumentException('unsupported actionType');
-        }
+        $cardCode = array_key_exists('cardCode', $data) ? (string) $data['cardCode'] : null;
 
-        $cardCode = isset($data['cardCode']) ? (string) $data['cardCode'] : null;
-
-        return new self($actionType, $cardCode);
+        return new self(
+            (string) ($data['actionType'] ?? ''),
+            $cardCode
+        );
     }
 }

@@ -9,6 +9,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use RuntimeException;
 use Stories\Shared\Http\JsonResponder;
+use Stories\Shared\Validation\InputValidator;
 use Stories\Shared\Security\AuthContext;
 use Stories\Slices\Rooms\Dto\JoinByCodeRequest;
 use Stories\Slices\Rooms\Service\RoomService;
@@ -18,7 +19,8 @@ final class JoinByInviteCodeAction
     public function __construct(
         private readonly RoomService $service,
         private readonly AuthContext $auth,
-        private readonly JsonResponder $responder
+        private readonly JsonResponder $responder,
+        private readonly InputValidator $validator
     ) {
     }
 
@@ -29,6 +31,7 @@ final class JoinByInviteCodeAction
             /** @var array<string, mixed> $body */
             $body = (array) $request->getParsedBody();
             $dto = JoinByCodeRequest::fromArray($body);
+            $this->validator->validate($dto);
 
             return $this->responder->respond($response, $this->service->joinByInviteCode($dto->inviteCode, $actor, $dto->spectator));
         } catch (InvalidArgumentException|RuntimeException $exception) {
