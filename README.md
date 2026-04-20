@@ -112,12 +112,17 @@ docker compose up --build
 Starts:
 - `api` on `:8080`
 - `ws` on `:8081`
+- `postgres` and `redis` are available inside the compose network (host ports are not bound to avoid local port conflicts).
 
 ## Environment
 
 The app auto-loads `.env` from project root if present.
 
-- `DB_PATH` (default: `var/data.sqlite`)
+- `DB_DRIVER` (`sqlite` by default; `pgsql` for PostgreSQL)
+- `DB_PATH` (used when `DB_DRIVER=sqlite`, default: `var/data.sqlite`)
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` (used when `DB_DRIVER=pgsql`)
+- `REDIS_ENABLED` (`0` by default)
+- `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`, `REDIS_PASSWORD` (Redis integration scaffold)
 - `JWT_SECRET` (default: `change-me`)
 - `DISCONNECT_GRACE_SECONDS` (default: `30`)
 - `WS_HOST` (default: `0.0.0.0`)
@@ -125,6 +130,7 @@ The app auto-loads `.env` from project root if present.
 
 ## Migrations
 
-- SQL files are in `migrations/`
-- Runner script: `bin/migrate.php`
-- Applied migrations are tracked in table `schema_migrations`
+- Migrations are managed by **Phinx**
+- Migration files are in `db/migrations/`
+- Runner script: `bin/migrate.php` (internally runs Phinx)
+- Works for both SQLite and PostgreSQL depending on `DB_DRIVER`
