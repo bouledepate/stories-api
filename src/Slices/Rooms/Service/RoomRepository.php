@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Stories\Slices\Rooms\Service;
 
 use Doctrine\DBAL\Connection;
+use Stories\Shared\Validation\BooleanNormalizer;
 
 final class RoomRepository
 {
@@ -145,7 +146,7 @@ final class RoomRepository
             'roomId' => (string) $row['id'],
             'name' => (string) $row['name'],
             'status' => (string) $row['status'],
-            'isPublic' => (bool) $row['is_public'],
+            'isPublic' => BooleanNormalizer::fromMixed($row['is_public'] ?? null, true),
             'ownerUserId' => (string) $row['owner_user_id'],
             'hasPassword' => !empty($row['password_hash']),
             'playersCount' => (int) $row['players_count'],

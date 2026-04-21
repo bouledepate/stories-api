@@ -29,4 +29,5 @@ export const state = {
   roomChatMessages: [],
   homeStatusMessage: '',
   myRooms: [],
+  roomNoticeMessage: '',
 };

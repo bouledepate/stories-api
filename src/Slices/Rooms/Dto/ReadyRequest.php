@@ -6,6 +6,7 @@ namespace Stories\Slices\Rooms\Dto;
 
 use Yiisoft\Validator\Rule\BooleanValue;
 use Yiisoft\Validator\Rule\Required;
+use Stories\Shared\Validation\BooleanNormalizer;
 
 final class ReadyRequest
 {
@@ -19,6 +20,6 @@ final class ReadyRequest
     /** @param array<string, mixed> $data */
     public static function fromArray(array $data): self
     {
-        return new self(array_key_exists('ready', $data) ? (bool) $data['ready'] : null);
+        return new self(array_key_exists('ready', $data) ? BooleanNormalizer::fromMixedNullable($data['ready']) : null);
     }
 }

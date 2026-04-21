@@ -7,6 +7,7 @@ namespace Stories\Slices\Rooms\Dto;
 use Yiisoft\Validator\Rule\Regex;
 use Yiisoft\Validator\Rule\Required;
 use Yiisoft\Validator\Rule\StringValue;
+use Stories\Shared\Validation\BooleanNormalizer;
 
 final class JoinByCodeRequest
 {
@@ -26,7 +27,7 @@ final class JoinByCodeRequest
     {
         return new self(
             strtoupper(trim((string) ($data['inviteCode'] ?? ''))),
-            (bool) ($data['spectator'] ?? false),
+            BooleanNormalizer::fromMixed($data['spectator'] ?? null, false),
             ($password = trim((string) ($data['password'] ?? ''))) === '' ? null : $password
         );
     }

@@ -10,6 +10,7 @@ use RuntimeException;
 use Stories\Shared\Http\JsonResponder;
 use Stories\Shared\Security\AuthContext;
 use Stories\Slices\Rooms\Service\RoomService;
+use Stories\Shared\Validation\BooleanNormalizer;
 
 final class JoinRoomAction
 {
@@ -27,7 +28,8 @@ final class JoinRoomAction
             $roomId = (string) ($request->getAttribute('roomId') ?? '');
             /** @var array<string, mixed> $body */
             $body = (array) $request->getParsedBody();
-            $spectator = (($request->getQueryParams()['spectator'] ?? 'false') === 'true') || (bool) ($body['spectator'] ?? false);
+            $spectator = BooleanNormalizer::fromMixed($request->getQueryParams()['spectator'] ?? null, false)
+                || BooleanNormalizer::fromMixed($body['spectator'] ?? null, false);
             $password = trim((string) ($body['password'] ?? ''));
 
             return $this->responder->respond(

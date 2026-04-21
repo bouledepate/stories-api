@@ -86,7 +86,20 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
 
     if (payload?.type === 'lobbies_event') {
       await refreshLobbies();
-      if (state.activeTab === 'home' || state.activeTab === 'lobbies' || state.activeTab === 'profile') {
+
+      const changedRoomId = payload?.data?.roomId;
+      if (changedRoomId && state.activeRoom?.roomId === changedRoomId) {
+        try {
+          state.activeRoom = await callApi(`/rooms/${encodeURIComponent(changedRoomId)}`);
+        } catch {
+          state.activeRoom = null;
+          state.activeTab = 'home';
+          state.roomNoticeMessage = t('roomClosedNotice');
+          showToast(t('roomClosedNotice'));
+        }
+      }
+
+      if (state.activeTab === 'home' || state.activeTab === 'lobbies' || state.activeTab === 'profile' || state.activeTab === 'roomManage') {
         render();
       }
       return;
@@ -109,7 +122,11 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
         state.activeRoom = await callApi(`/rooms/${encodeURIComponent(payload.roomId)}`);
         render();
       } catch {
-        // noop
+        state.activeRoom = null;
+        state.activeTab = 'home';
+        state.roomNoticeMessage = t('roomClosedNotice');
+        showToast(t('roomClosedNotice'));
+        render();
       }
       return;
     }
@@ -170,9 +187,10 @@ const joinLobbyRequest = async (render, roomId, ownerUserId, password = '') => {
     }
     subscribeRoomSocket(state.activeRoom.roomId);
     emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
-    state.activeTab = 'home';
+    state.activeTab = 'roomManage';
     setStatus('homeStatus', `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
     state.roomChatMessages = [];
+    state.roomNoticeMessage = '';
     showToast(t('roomJoinSuccess'), 'ok');
     render();
     return true;
@@ -207,9 +225,10 @@ const bindRoomModalEvents = (render) => {
       });
       subscribeRoomSocket(state.activeRoom.roomId);
       state.roomChatMessages = [];
+      state.roomNoticeMessage = '';
       emitLobbiesChanged('room_created', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
       state.roomModalOpen = false;
-      state.activeTab = 'home';
+      state.activeTab = 'roomManage';
       state.homeStatusMessage = `${t('roomCreated')} ${state.activeRoom.inviteCode}`;
       render();
     } catch (e) {
@@ -242,9 +261,10 @@ const bindRoomModalEvents = (render) => {
       });
       subscribeRoomSocket(state.activeRoom.roomId);
       state.roomChatMessages = [];
+      state.roomNoticeMessage = '';
       emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
       state.roomModalOpen = false;
-      state.activeTab = 'home';
+      state.activeTab = 'roomManage';
       state.homeStatusMessage = `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`;
       render();
     } catch (e) {
@@ -290,11 +310,17 @@ export const bindCommonEvents = (render) => {
     });
   });
 
+
+  document.querySelector('[data-act="closeRoomNotice"]')?.addEventListener('click', () => {
+    state.roomNoticeMessage = '';
+    render();
+  });
   document.querySelector('[data-act="logout"]')?.addEventListener('click', () => {
     state.token = '';
     state.user = null;
     state.activeRoom = null;
     state.authOpen = false;
+    state.roomNoticeMessage = '';
     localStorage.removeItem('stories_token');
     render();
   });
@@ -428,6 +454,7 @@ export const bindHomeEvents = (render) => {
       });
       state.activeRoom = null;
       state.activeTab = 'home';
+      state.roomNoticeMessage = '';
       emitLobbiesChanged('room_left', { roomId, topic: LOBBIES_TOPIC });
       setStatus('homeStatus', t('ready'), true);
       render();
@@ -589,7 +616,8 @@ export const bindProfileEvents = (render) => {
         const roomId = btn.dataset.roomId;
         if (!roomId) return;
         state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}`);
-        state.activeTab = 'home';
+        state.activeTab = 'roomManage';
+        state.roomNoticeMessage = '';
         render();
       } catch (e) {
         setStatus('profileStatus', e.message);
@@ -633,6 +661,7 @@ export const bindProfileEvents = (render) => {
 };
 
 export const bindRoomManagePageEvents = (render) => {
+  bindHomeEvents(render);
   bindRoomManageEvents(render);
 };
 

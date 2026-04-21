@@ -16,12 +16,28 @@ final class ParticipantRepository
 
     public function addOwner(string $roomId, string $userId): void
     {
-        $this->db->insert('room_participants', [
-            'room_id' => $roomId,
-            'user_id' => $userId,
-            'role' => 'owner',
-            'ready' => false,
-            'joined_at' => gmdate(DATE_ATOM),
+        $builder = $this->db->createQueryBuilder();
+        $builder
+            ->insert('room_participants')
+            ->values([
+                'room_id' => ':roomId',
+                'user_id' => ':userId',
+                'role' => ':role',
+                'ready' => ':ready',
+                'joined_at' => ':joinedAt',
+            ])
+            ->setParameter('roomId', $roomId)
+            ->setParameter('userId', $userId)
+            ->setParameter('role', 'owner')
+            ->setParameter('ready', false, ParameterType::BOOLEAN)
+            ->setParameter('joinedAt', gmdate(DATE_ATOM));
+
+        $this->db->executeStatement($builder->getSQL(), $builder->getParameters(), [
+            'roomId' => ParameterType::STRING,
+            'userId' => ParameterType::STRING,
+            'role' => ParameterType::STRING,
+            'ready' => ParameterType::BOOLEAN,
+            'joinedAt' => ParameterType::STRING,
         ]);
     }
 
