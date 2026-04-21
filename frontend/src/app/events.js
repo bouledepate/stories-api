@@ -475,16 +475,8 @@ export const bindHomeEvents = (render) => {
 
   document.querySelector('[data-act="startGame"]')?.addEventListener('click', async () => {
     if (!requireRoom()) return;
-    try {
-      state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/start`, {
-        method: 'POST',
-      });
-      emitLobbiesChanged('room_started', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
-      setStatus('homeStatus', t('ready'), true);
-      render();
-    } catch (e) {
-      showApiError('homeStatus', e);
-    }
+    setStatus('homeStatus', t('gameNotImplementedYet'));
+    showToast(t('gameNotImplementedYet'));
   });
 
   document.querySelector('[data-act="leaveRoom"]')?.addEventListener('click', async () => {

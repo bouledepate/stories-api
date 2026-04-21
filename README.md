@@ -23,7 +23,7 @@ Vertical Slice backend scaffold for a turn-based board game API with modern web 
 This project uses **Vertical Slice Architecture**:
 
 - `src/Slices/Auth` — registration, login, me
-- `src/Slices/Rooms` — room lifecycle + round actions
+- `src/Slices/Rooms` — room lifecycle, lobby and room management
 - `src/Slices/Admin` — card management endpoints
 - `src/Shared` — shared concerns (DB, auth, responder, websocket)
 

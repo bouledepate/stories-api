@@ -79,7 +79,7 @@ paths:
   /auth/me:
     get:
       tags: [Auth]
-      summary: Get profile and stats of current user
+      summary: Get profile of current user
       responses:
         '200':
           description: Current user
@@ -181,16 +181,22 @@ paths:
   /rooms/{roomId}/start:
     post:
       tags: [Rooms]
-      summary: Start game (owner only)
+      summary: Start game (not implemented yet)
       parameters:
         - $ref: '#/components/parameters/RoomId'
       responses:
         '200':
-          description: Room snapshot
+          description: Not implemented notice and current room state
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RoomSnapshot'
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Пока не реализовано
+                  state:
+                    $ref: '#/components/schemas/RoomSnapshot'
 
   /rooms/{roomId}:
     get:
@@ -205,32 +211,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RoomSnapshot'
-
-  /rooms/{roomId}/actions:
-    post:
-      tags: [Rooms]
-      summary: Submit game action
-      parameters:
-        - $ref: '#/components/parameters/RoomId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SubmitActionRequest'
-      responses:
-        '200':
-          description: Action result and updated state
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  result:
-                    type: object
-                    additionalProperties: true
-                  state:
-                    $ref: '#/components/schemas/RoomSnapshot'
 
   /admin/cards:
     get:
@@ -386,17 +366,6 @@ components:
         ready:
           type: boolean
 
-    SubmitActionRequest:
-      type: object
-      required: [actionType]
-      properties:
-        actionType:
-          type: string
-          enum: [draw_character, play_character, pass_turn]
-        cardCode:
-          type: string
-          nullable: true
-
     Card:
       type: object
       additionalProperties: true
@@ -442,10 +411,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Participant'
-        game:
-          type: object
-          nullable: true
-          additionalProperties: true
 
     MeResponse:
       type: object
@@ -456,14 +421,6 @@ components:
           type: string
         role:
           type: string
-        wins:
-          type: integer
-        losses:
-          type: integer
-        victoryTokens:
-          type: integer
-        eliminatedWith3:
-          type: integer
 
     PatchCardRequest:
       type: object

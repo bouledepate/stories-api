@@ -9,13 +9,11 @@ use Stories\Shared\Exception\ApiException;
 use Stories\Shared\Http\ApiErrorCode;
 use Stories\Shared\Security\AuthenticatedUser;
 use Stories\Slices\Rooms\Dto\CreateRoomRequest;
-use Stories\Slices\Rooms\Service\GameRepository;
 use Stories\Slices\Rooms\Service\ParticipantRepository;
+use Stories\Slices\Rooms\Service\RoomBanRepository;
 use Stories\Slices\Rooms\Service\RoomRepository;
 use Stories\Slices\Rooms\Service\RoomService;
 use Stories\Slices\Rooms\Service\RoomSnapshotBuilder;
-use Stories\Slices\Rooms\Service\RoundFactory;
-use Stories\Slices\Rooms\Service\RoundStateService;
 use Stories\Tests\Support\TestDatabase;
 
 final class RoomServiceTest extends TestCase
@@ -41,11 +39,8 @@ final class RoomServiceTest extends TestCase
         $service = new RoomService(
             new RoomRepository($db),
             new ParticipantRepository($db),
-            new GameRepository($db),
-            new RoomSnapshotBuilder(new ParticipantRepository($db), new GameRepository($db)),
-            new RoundFactory($db),
-            new RoundStateService(),
-            30
+            new RoomBanRepository($db),
+            new RoomSnapshotBuilder(new ParticipantRepository($db))
         );
 
         $owner = new AuthenticatedUser('u1', 'owner', 'user');
@@ -57,12 +52,8 @@ final class RoomServiceTest extends TestCase
         $service->join($roomId, $second, false);
         $service->ready($roomId, $owner, true);
         $service->ready($roomId, $second, true);
-
         $started = $service->start($roomId, $owner);
-
-        self::assertSame('u1', $started['ownerId']);
-        self::assertArrayHasKey('game', $started);
-        self::assertSame('in_progress', $started['game']['status']);
+        self::assertSame('Пока не реализовано', $started['message']);
     }
 
     public function testOwnerCannotCreateSecondRoomWithoutClosingFirst(): void
@@ -79,11 +70,8 @@ final class RoomServiceTest extends TestCase
         $service = new RoomService(
             new RoomRepository($db),
             new ParticipantRepository($db),
-            new GameRepository($db),
-            new RoomSnapshotBuilder(new ParticipantRepository($db), new GameRepository($db)),
-            new RoundFactory($db),
-            new RoundStateService(),
-            30
+            new RoomBanRepository($db),
+            new RoomSnapshotBuilder(new ParticipantRepository($db))
         );
 
         $owner = new AuthenticatedUser('u1', 'owner', 'user');
@@ -112,11 +100,8 @@ final class RoomServiceTest extends TestCase
         $service = new RoomService(
             new RoomRepository($db),
             new ParticipantRepository($db),
-            new GameRepository($db),
-            new RoomSnapshotBuilder(new ParticipantRepository($db), new GameRepository($db)),
-            new RoundFactory($db),
-            new RoundStateService(),
-            30
+            new RoomBanRepository($db),
+            new RoomSnapshotBuilder(new ParticipantRepository($db))
         );
 
         $owner = new AuthenticatedUser('u1', 'owner', 'user');

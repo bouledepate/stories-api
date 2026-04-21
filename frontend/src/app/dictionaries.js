@@ -179,6 +179,7 @@ export const dictionaries = {
     roleSystem: 'Система',
     roomClosedNotice: 'Комната была закрыта владельцем.',
     roomManageReadonly: 'Только владелец может менять настройки комнаты.',
+    gameNotImplementedYet: 'Пока не реализовано.',
   },
   en: {
     appTag: 'Stories',
@@ -360,5 +361,6 @@ export const dictionaries = {
     roleSystem: 'System',
     roomClosedNotice: 'The room was closed by the owner.',
     roomManageReadonly: 'Only the owner can change room settings.',
+    gameNotImplementedYet: 'Not implemented yet.',
   },
 };
