@@ -30,6 +30,11 @@ return [
     'error.DECK_NOT_FOUND' => 'Deck not found.',
     'error.CARD_NOT_FOUND' => 'Card not found.',
     'error.ADMIN_ROLE_REQUIRED' => 'Admin role required.',
+    'error.ONLY_OWNER_CAN_MANAGE_ROOM' => 'Only room owner can manage room.',
+    'error.OWNER_CANNOT_BE_REMOVED' => 'Owner cannot be kicked or blocked.',
+    'error.ONLY_PLAYERS_CAN_BE_KICKED' => 'Only players can be kicked.',
+    'error.USER_BLOCKED_IN_ROOM' => 'You are blocked in this room.',
+    'error.INVITE_CODE_ROTATE_COOLDOWN' => 'Invite code can be regenerated only once per minute.',
     'error.VALIDATION_ERROR' => 'Validation failed.',
     'error.UNKNOWN_ERROR' => 'Unknown error.',
 ];

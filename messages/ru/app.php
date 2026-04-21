@@ -30,6 +30,11 @@ return [
     'error.DECK_NOT_FOUND' => 'Колода не найдена.',
     'error.CARD_NOT_FOUND' => 'Карта не найдена.',
     'error.ADMIN_ROLE_REQUIRED' => 'Требуется роль администратора.',
+    'error.ONLY_OWNER_CAN_MANAGE_ROOM' => 'Только владелец может управлять комнатой.',
+    'error.OWNER_CANNOT_BE_REMOVED' => 'Владельца нельзя кикнуть или заблокировать.',
+    'error.ONLY_PLAYERS_CAN_BE_KICKED' => 'Кик доступен только для игроков.',
+    'error.USER_BLOCKED_IN_ROOM' => 'Вы заблокированы в этой комнате.',
+    'error.INVITE_CODE_ROTATE_COOLDOWN' => 'Invite-код можно пересоздавать не чаще одного раза в минуту.',
     'error.VALIDATION_ERROR' => 'Ошибка валидации.',
     'error.UNKNOWN_ERROR' => 'Неизвестная ошибка.',
 ];

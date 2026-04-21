@@ -9,6 +9,7 @@ import {
   bindHomeEvents,
   bindLobbyEvents,
   bindProfileEvents,
+  bindRoomManagePageEvents,
 } from './app/events';
 import { renderLayout } from './app/views';
 import { state } from './app/state';
@@ -37,6 +38,7 @@ const render = () => {
   if (state.activeTab === 'home') bindHomeEvents(render);
   if (state.activeTab === 'lobbies') bindLobbyEvents(render);
   if (state.activeTab === 'profile') bindProfileEvents(render);
+  if (state.activeTab === 'roomManage') bindRoomManagePageEvents(render);
   if (state.activeTab === 'control' && state.user?.role === 'admin') {
     bindAdminEvents();
     bindDebugEvents();

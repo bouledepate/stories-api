@@ -21,6 +21,7 @@ final class RoomSnapshotBuilder
             'roomId' => $room->id,
             'name' => $room->name,
             'ownerId' => $room->ownerUserId,
+            'ownerUsername' => $room->ownerUsername,
             'inviteCode' => $room->inviteCode,
             'isPublic' => $room->isPublic,
             'hasPassword' => $room->passwordHash !== null,

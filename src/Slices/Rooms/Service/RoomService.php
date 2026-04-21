@@ -16,11 +16,13 @@ final class RoomService
     public function __construct(
         private readonly RoomRepository $roomRepository,
         private readonly ParticipantRepository $participantRepository,
+        private readonly RoomBanRepository $roomBanRepository,
         private readonly GameRepository $gameRepository,
         private readonly RoomSnapshotBuilder $snapshotBuilder,
         private readonly RoundFactory $roundFactory,
         private readonly RoundStateService $roundStateService,
-        private readonly int $disconnectGraceSeconds = 30
+        private readonly int $disconnectGraceSeconds = 30,
+        private readonly int $inviteRotateCooldownSeconds = 60
     ) {
     }
 
@@ -44,6 +46,9 @@ final class RoomService
     public function join(string $roomId, AuthenticatedUser $actor, bool $spectator, ?string $password = null): array
     {
         $room = $this->requireRoom($roomId);
+        if ($this->roomBanRepository->isBanned($roomId, $actor->id)) {
+            throw new ApiException(ApiErrorCode::USER_BLOCKED_IN_ROOM);
+        }
         if ($room->ownerUserId !== $actor->id) {
             $this->guardPassword($room, $password);
         }
@@ -139,6 +144,9 @@ final class RoomService
     /** @return array<string, mixed> */
     public function state(string $roomId, ?string $requesterId = null): array
     {
+        if ($requesterId !== null && $this->roomBanRepository->isBanned($roomId, $requesterId)) {
+            throw new ApiException(ApiErrorCode::USER_BLOCKED_IN_ROOM);
+        }
         $this->resolveDisconnectTimeouts($roomId);
 
         return $this->snapshot($roomId, $requesterId);
@@ -150,6 +158,70 @@ final class RoomService
         $state = $this->decodeState($game->stateJson);
         $state->markDisconnected($userId, time() + $this->disconnectGraceSeconds);
         $this->gameRepository->persistState($game->id, $state);
+    }
+
+    /** @return array<string, mixed> */
+    public function updateSettings(string $roomId, AuthenticatedUser $actor, bool $isPublic, string $password): array
+    {
+        $room = $this->requireRoom($roomId);
+        $this->ensureOwner($room, $actor);
+
+        $trimmed = trim($password);
+        $passwordHash = $trimmed === '' ? null : password_hash($trimmed, PASSWORD_DEFAULT);
+        $this->roomRepository->updateSettings($roomId, $isPublic, $passwordHash);
+
+        return $this->snapshot($roomId, $actor->id);
+    }
+
+    /** @return array<string, mixed> */
+    public function regenerateInviteCode(string $roomId, AuthenticatedUser $actor): array
+    {
+        $room = $this->requireRoom($roomId);
+        $this->ensureOwner($room, $actor);
+
+        if ($room->inviteCodeRegeneratedAt !== null) {
+            $lastTs = strtotime($room->inviteCodeRegeneratedAt) ?: 0;
+            if ((time() - $lastTs) < $this->inviteRotateCooldownSeconds) {
+                throw new ApiException(ApiErrorCode::INVITE_CODE_ROTATE_COOLDOWN);
+            }
+        }
+
+        $this->roomRepository->rotateInviteCode($roomId, $this->generateInviteCode());
+
+        return $this->snapshot($roomId, $actor->id);
+    }
+
+    /** @return array<string, mixed> */
+    public function kick(string $roomId, AuthenticatedUser $actor, string $targetUserId): array
+    {
+        $room = $this->requireRoom($roomId);
+        $this->ensureOwner($room, $actor);
+        if ($targetUserId === $room->ownerUserId) {
+            throw new ApiException(ApiErrorCode::OWNER_CANNOT_BE_REMOVED);
+        }
+        $role = $this->participantRepository->roleForUser($roomId, $targetUserId);
+        if ($role !== 'player') {
+            throw new ApiException(ApiErrorCode::ONLY_PLAYERS_CAN_BE_KICKED);
+        }
+
+        $this->participantRepository->remove($roomId, $targetUserId);
+
+        return $this->snapshot($roomId, $actor->id);
+    }
+
+    /** @return array<string, mixed> */
+    public function ban(string $roomId, AuthenticatedUser $actor, string $targetUserId): array
+    {
+        $room = $this->requireRoom($roomId);
+        $this->ensureOwner($room, $actor);
+        if ($targetUserId === $room->ownerUserId) {
+            throw new ApiException(ApiErrorCode::OWNER_CANNOT_BE_REMOVED);
+        }
+
+        $this->participantRepository->remove($roomId, $targetUserId);
+        $this->roomBanRepository->ban($roomId, $targetUserId, $actor->id);
+
+        return $this->snapshot($roomId, $actor->id);
     }
 
     private function resolveDisconnectTimeouts(string $roomId): void
@@ -169,6 +241,13 @@ final class RoomService
     {
         if (!$this->participantRepository->exists($roomId, $userId)) {
             throw new ApiException(ApiErrorCode::USER_NOT_IN_ROOM);
+        }
+    }
+
+    private function ensureOwner(RoomRecord $room, AuthenticatedUser $actor): void
+    {
+        if ($room->ownerUserId !== $actor->id) {
+            throw new ApiException(ApiErrorCode::ONLY_OWNER_CAN_MANAGE_ROOM);
         }
     }
 

@@ -21,6 +21,7 @@ use Yiisoft\Validator\Validator;
 return static function (array $env): ContainerBuilder {
     $jwtSecret = (string) ($env['JWT_SECRET'] ?? 'change-me');
     $disconnectGraceSeconds = (int) ($env['DISCONNECT_GRACE_SECONDS'] ?? 30);
+    $inviteRotateCooldownSeconds = (int) ($env['INVITE_ROTATE_COOLDOWN_SECONDS'] ?? 60);
 
     $builder = new ContainerBuilder();
     $builder->addDefinitions([
@@ -41,7 +42,9 @@ return static function (array $env): ContainerBuilder {
 
             return $translator;
         },
-        RoomService::class => DI\autowire()->constructorParameter('disconnectGraceSeconds', $disconnectGraceSeconds),
+        RoomService::class => DI\autowire()
+            ->constructorParameter('disconnectGraceSeconds', $disconnectGraceSeconds)
+            ->constructorParameter('inviteRotateCooldownSeconds', $inviteRotateCooldownSeconds),
     ]);
 
     return $builder;

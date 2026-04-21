@@ -17,6 +17,7 @@ const mapErrorCode = (code, status) => {
     ROOM_PASSWORD_INVALID: 'roomPasswordInvalid',
     OWNER_ALREADY_HAS_ROOM: 'ownerAlreadyHasRoom',
     CURRENT_PASSWORD_INVALID: 'currentPasswordInvalid',
+    USER_BLOCKED_IN_ROOM: 'blockedNotice',
     VALIDATION_ERROR: 'validationFailed',
     UNKNOWN_ERROR: 'unknownError',
   };

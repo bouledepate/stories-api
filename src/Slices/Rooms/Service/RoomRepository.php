@@ -22,6 +22,7 @@ final class RoomRepository
             'status' => 'lobby',
             'is_public' => $isPublic ? 1 : 0,
             'password_hash' => $passwordHash,
+            'invite_code_regenerated_at' => null,
             'created_at' => gmdate(DATE_ATOM),
         ]);
     }
@@ -52,8 +53,9 @@ final class RoomRepository
     public function findById(string $roomId): ?RoomRecord
     {
         $row = $this->db->createQueryBuilder()
-            ->select('r.id', 'r.invite_code', 'r.name', 'r.owner_user_id', 'r.status', 'r.is_public', 'r.password_hash')
+            ->select('r.id', 'r.invite_code', 'r.name', 'r.owner_user_id', 'owner.username AS owner_username', 'r.status', 'r.is_public', 'r.password_hash', 'r.invite_code_regenerated_at')
             ->from('rooms', 'r')
+            ->innerJoin('r', 'users', 'owner', 'owner.id = r.owner_user_id')
             ->where('r.id = :roomId')
             ->setParameter('roomId', $roomId)
             ->fetchAssociative();
@@ -83,6 +85,22 @@ final class RoomRepository
             ->fetchOne();
 
         return $exists !== false;
+    }
+
+    public function updateSettings(string $roomId, bool $isPublic, ?string $passwordHash): void
+    {
+        $this->db->update('rooms', [
+            'is_public' => $isPublic,
+            'password_hash' => $passwordHash,
+        ], ['id' => $roomId]);
+    }
+
+    public function rotateInviteCode(string $roomId, string $inviteCode): void
+    {
+        $this->db->update('rooms', [
+            'invite_code' => $inviteCode,
+            'invite_code_regenerated_at' => gmdate(DATE_ATOM),
+        ], ['id' => $roomId]);
     }
 
     /**

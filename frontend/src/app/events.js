@@ -20,6 +20,32 @@ export const logDebug = (payload) => {
   container.prepend(line);
 };
 
+const showToast = (message, type = 'error') => {
+  const container = document.querySelector('#toastContainer');
+  if (!container || !message) return;
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  container.append(toast);
+  window.setTimeout(() => toast.remove(), 3500);
+};
+
+const clearFieldError = (selector) => {
+  const field = document.querySelector(selector);
+  if (!field) return;
+  field.classList.remove('input-error');
+  field.removeAttribute('aria-invalid');
+};
+
+const markFieldError = (selector, message) => {
+  const field = document.querySelector(selector);
+  if (!field) return;
+  field.classList.add('input-error');
+  field.setAttribute('aria-invalid', 'true');
+  field.focus();
+  showToast(message);
+};
+
 const sendSocketMessage = (payload) => {
   if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return;
   state.socket.send(JSON.stringify(payload));
@@ -67,12 +93,33 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
     }
 
     if (payload?.type === 'room_event' && payload?.roomId && state.activeRoom?.roomId === payload.roomId) {
+      if (payload?.event === 'chat_message' && payload?.data?.text) {
+        state.roomChatMessages = [
+          ...state.roomChatMessages,
+          {
+            username: payload?.data?.username || 'user',
+            role: payload?.data?.role || 'player',
+            text: payload?.data?.text || '',
+          },
+        ].slice(-100);
+        if (state.activeTab === 'roomManage') render();
+        return;
+      }
       try {
         state.activeRoom = await callApi(`/rooms/${encodeURIComponent(payload.roomId)}`);
         render();
       } catch {
         // noop
       }
+      return;
+    }
+
+    if (payload?.type === 'presence' && payload?.roomId && state.activeRoom?.roomId === payload.roomId) {
+      state.roomChatMessages = [
+        ...state.roomChatMessages,
+        { username: t('roleSystem'), role: 'system', text: payload?.message || '' },
+      ].slice(-100);
+      if (state.activeTab === 'roomManage') render();
     }
   };
 
@@ -98,6 +145,114 @@ const openRoomModal = (render, mode = 'create') => {
 const closeRoomModal = (render) => {
   state.roomModalOpen = false;
   render();
+};
+
+const closeJoinLobbyModal = (render) => {
+  state.joinLobbyModalOpen = false;
+  state.joinLobbyRoomId = '';
+  state.joinLobbyOwnerUserId = '';
+  state.joinLobbyNeedsPassword = false;
+  state.joinLobbyPassword = '';
+  render();
+};
+
+const joinLobbyRequest = async (render, roomId, ownerUserId, password = '') => {
+  try {
+    if (state.user?.id && ownerUserId === state.user.id) {
+      state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}`);
+    } else {
+      const payload = { spectator: false };
+      if (password.trim() !== '') payload.password = password.trim();
+      state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}/join`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    }
+    subscribeRoomSocket(state.activeRoom.roomId);
+    emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
+    state.activeTab = 'home';
+    setStatus('homeStatus', `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
+    state.roomChatMessages = [];
+    showToast(t('roomJoinSuccess'), 'ok');
+    render();
+    return true;
+  } catch (e) {
+    setStatus('homeStatus', e.message);
+    showToast(e.message);
+    return false;
+  }
+};
+
+const bindRoomModalEvents = (render) => {
+  document.querySelector('[data-act="createRoom"]')?.addEventListener('click', async () => {
+    if (!state.user) return openAuth(render, 'login');
+    clearFieldError('#roomName');
+
+    try {
+      const name = safeTextValue('#roomName', 64);
+      if (name === '') {
+        markFieldError('#roomName', t('requiredField'));
+        return;
+      }
+      const password = safeTextValue('#roomPassword', 128);
+      const payload = {
+        name,
+        isPublic: Boolean(document.querySelector('#roomIsPublic')?.checked),
+      };
+      if (password !== '') payload.password = password;
+
+      state.activeRoom = await callApi('/rooms', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      subscribeRoomSocket(state.activeRoom.roomId);
+      state.roomChatMessages = [];
+      emitLobbiesChanged('room_created', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
+      state.roomModalOpen = false;
+      state.activeTab = 'home';
+      state.homeStatusMessage = `${t('roomCreated')} ${state.activeRoom.inviteCode}`;
+      render();
+    } catch (e) {
+      state.homeStatusMessage = e.message;
+      setStatus('homeStatus', e.message);
+      showToast(e.message);
+    }
+  });
+
+  document.querySelector('[data-act="joinByCode"]')?.addEventListener('click', async () => {
+    if (!state.user) return openAuth(render, 'login');
+    clearFieldError('#inviteCode');
+
+    try {
+      const inviteCode = safeTextValue('#inviteCode', 6).toUpperCase();
+      if (inviteCode.length !== 6) {
+        markFieldError('#inviteCode', t('inviteCodeInvalid'));
+        return;
+      }
+      const password = safeTextValue('#joinPassword', 128);
+      const payload = {
+        inviteCode,
+        spectator: Boolean(document.querySelector('#joinAsSpectator')?.checked),
+      };
+      if (password !== '') payload.password = password;
+
+      state.activeRoom = await callApi('/rooms/join-by-code', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      subscribeRoomSocket(state.activeRoom.roomId);
+      state.roomChatMessages = [];
+      emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
+      state.roomModalOpen = false;
+      state.activeTab = 'home';
+      state.homeStatusMessage = `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`;
+      render();
+    } catch (e) {
+      state.homeStatusMessage = e.message;
+      setStatus('homeStatus', e.message);
+      showToast(e.message);
+    }
+  });
 };
 
 export const bindCommonEvents = (render) => {
@@ -147,6 +302,25 @@ export const bindCommonEvents = (render) => {
   document.querySelectorAll('[data-act="closeRoomModal"]').forEach((node) => {
     node.addEventListener('click', () => closeRoomModal(render));
   });
+  document.querySelectorAll('[data-act="closeJoinLobbyModal"]').forEach((node) => {
+    node.addEventListener('click', () => closeJoinLobbyModal(render));
+  });
+  document.querySelector('[data-act="confirmJoinLobby"]')?.addEventListener('click', async () => {
+    if (!state.joinLobbyRoomId) return;
+    clearFieldError('#lobbyJoinPassword');
+    const password = safeTextValue('#lobbyJoinPassword', 128);
+    if (state.joinLobbyNeedsPassword && password === '') {
+      markFieldError('#lobbyJoinPassword', t('requiredField'));
+      setStatus('joinLobbyStatus', t('requiredField'));
+      return;
+    }
+    const ok = await joinLobbyRequest(render, state.joinLobbyRoomId, state.joinLobbyOwnerUserId, password);
+    if (ok) closeJoinLobbyModal(render);
+  });
+
+  if (state.roomModalOpen && state.user) {
+    bindRoomModalEvents(render);
+  }
 };
 
 export const bindAuthEvents = async (render, loadMe) => {
@@ -203,60 +377,6 @@ export const bindHomeEvents = (render) => {
     return true;
   };
 
-  document.querySelector('[data-act="createRoom"]')?.addEventListener('click', async () => {
-    if (!state.user) return openAuth(render, 'login');
-
-    try {
-      const password = safeTextValue('#roomPassword', 128);
-      const payload = {
-        name: safeTextValue('#roomName', 64),
-        isPublic: Boolean(document.querySelector('#roomIsPublic')?.checked),
-      };
-      if (password !== '') payload.password = password;
-
-      state.activeRoom = await callApi('/rooms', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      subscribeRoomSocket(state.activeRoom.roomId);
-      emitLobbiesChanged('room_created', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
-      state.roomModalOpen = false;
-      state.activeTab = 'home';
-      state.homeStatusMessage = `${t('roomCreated')} ${state.activeRoom.inviteCode}`;
-      render();
-    } catch (e) {
-      state.homeStatusMessage = e.message;
-      setStatus('homeStatus', e.message);
-    }
-  });
-
-  document.querySelector('[data-act="joinByCode"]')?.addEventListener('click', async () => {
-    if (!state.user) return openAuth(render, 'login');
-
-    try {
-      const password = safeTextValue('#joinPassword', 128);
-      const payload = {
-        inviteCode: safeTextValue('#inviteCode', 6).toUpperCase(),
-        spectator: Boolean(document.querySelector('#joinAsSpectator')?.checked),
-      };
-      if (password !== '') payload.password = password;
-
-      state.activeRoom = await callApi('/rooms/join-by-code', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      subscribeRoomSocket(state.activeRoom.roomId);
-      emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
-      state.roomModalOpen = false;
-      state.activeTab = 'home';
-      state.homeStatusMessage = `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`;
-      render();
-    } catch (e) {
-      state.homeStatusMessage = e.message;
-      setStatus('homeStatus', e.message);
-    }
-  });
-
   document.querySelector('[data-act="refreshRoom"]')?.addEventListener('click', async () => {
     if (!requireRoom()) return;
     try {
@@ -271,11 +391,14 @@ export const bindHomeEvents = (render) => {
   document.querySelector('[data-act="readyRoom"]')?.addEventListener('click', async () => {
     if (!requireRoom()) return;
     try {
+      const me = (state.activeRoom.participants || []).find((participant) => participant.userId === state.user?.id);
+      const nextReady = !(me?.ready ?? false);
       state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/ready`, {
         method: 'POST',
+        body: JSON.stringify({ ready: nextReady }),
       });
       emitLobbiesChanged('room_ready_changed', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
-      setStatus('homeStatus', t('ready'), true);
+      setStatus('homeStatus', nextReady ? t('statusReady') : t('statusNotReady'), true);
       render();
     } catch (e) {
       setStatus('homeStatus', e.message);
@@ -304,6 +427,7 @@ export const bindHomeEvents = (render) => {
         method: 'POST',
       });
       state.activeRoom = null;
+      state.activeTab = 'home';
       emitLobbiesChanged('room_left', { roomId, topic: LOBBIES_TOPIC });
       setStatus('homeStatus', t('ready'), true);
       render();
@@ -317,29 +441,104 @@ export const bindHomeEvents = (render) => {
       if (!state.user) return openAuth(render, 'login');
       const roomId = btn.dataset.roomId;
       if (!roomId) return;
+      const ownerUserId = btn.dataset.roomOwnerId || '';
+      const needsPassword = btn.dataset.roomHasPassword === '1';
+      if (state.user?.id && ownerUserId === state.user.id) {
+        await joinLobbyRequest(render, roomId, ownerUserId);
+        return;
+      }
+      state.joinLobbyModalOpen = true;
+      state.joinLobbyRoomId = roomId;
+      state.joinLobbyOwnerUserId = ownerUserId;
+      state.joinLobbyNeedsPassword = needsPassword;
+      render();
+    });
+  });
+};
 
+const bindRoomManageEvents = (render) => {
+  document.querySelector('[data-act="saveRoomSettings"]')?.addEventListener('click', async () => {
+    if (!state.activeRoom?.roomId) return;
+    try {
+      const isPublic = Boolean(document.querySelector('#manageIsPublic')?.checked);
+      const password = safeTextValue('#managePassword', 128);
+      state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/settings`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isPublic, password }),
+      });
+      emitLobbiesChanged('room_settings_updated', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
+      setStatus('roomManageStatus', t('roomSettingsSaved'), true);
+      showToast(t('roomSettingsSaved'), 'ok');
+      render();
+    } catch (e) {
+      setStatus('roomManageStatus', e.message);
+      showToast(e.message);
+    }
+  });
+
+  document.querySelector('[data-act="regenInvite"]')?.addEventListener('click', async () => {
+    if (!state.activeRoom?.roomId) return;
+    try {
+      state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/invite-code/regenerate`, {
+        method: 'POST',
+      });
+      emitLobbiesChanged('room_invite_regenerated', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
+      setStatus('roomManageStatus', t('inviteRegenerated'), true);
+      showToast(t('inviteRegenerated'), 'ok');
+      render();
+    } catch (e) {
+      setStatus('roomManageStatus', e.message);
+      showToast(e.message);
+    }
+  });
+
+  document.querySelectorAll('[data-act="kickParticipant"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!state.activeRoom?.roomId) return;
+      const userId = btn.dataset.userId;
+      if (!userId) return;
       try {
-        const ownerUserId = btn.dataset.roomOwnerId || '';
-        if (state.user?.id && ownerUserId === state.user.id) {
-          state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}`);
-        } else {
-          const password = window.prompt(t('roomPassword')) || '';
-          const payload = { spectator: false };
-          if (password.trim() !== '') payload.password = password.trim();
-          state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}/join`, {
-            method: 'POST',
-            body: JSON.stringify(payload),
-          });
-        }
-        subscribeRoomSocket(state.activeRoom.roomId);
-        emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
-        state.activeTab = 'home';
-        setStatus('homeStatus', `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
+        state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/participants/${encodeURIComponent(userId)}/kick`, { method: 'POST' });
+        emitLobbiesChanged('room_participant_kicked', { roomId: state.activeRoom.roomId, userId, topic: LOBBIES_TOPIC });
         render();
       } catch (e) {
-        setStatus('homeStatus', e.message);
+        setStatus('roomManageStatus', e.message);
+        showToast(e.message);
       }
     });
+  });
+
+  document.querySelectorAll('[data-act="banParticipant"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!state.activeRoom?.roomId) return;
+      const userId = btn.dataset.userId;
+      if (!userId) return;
+      try {
+        state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/participants/${encodeURIComponent(userId)}/ban`, { method: 'POST' });
+        emitLobbiesChanged('room_participant_banned', { roomId: state.activeRoom.roomId, userId, topic: LOBBIES_TOPIC });
+        render();
+      } catch (e) {
+        setStatus('roomManageStatus', e.message);
+        showToast(e.message);
+      }
+    });
+  });
+
+  document.querySelector('[data-act="sendRoomChat"]')?.addEventListener('click', () => {
+    const text = safeTextValue('#roomChatInput', 512);
+    if (!state.activeRoom?.roomId || text === '') return;
+    sendSocketMessage({
+      type: 'room_event',
+      roomId: state.activeRoom.roomId,
+      event: 'chat_message',
+      data: {
+        text,
+        username: state.user?.username || 'user',
+        role: (state.activeRoom.participants || []).find((participant) => participant.userId === state.user?.id)?.role || 'player',
+      },
+    });
+    const input = document.querySelector('#roomChatInput');
+    if (input) input.value = '';
   });
 };
 
@@ -368,28 +567,17 @@ export const bindLobbyEvents = (render) => {
       if (!state.user) return openAuth(render, 'login');
       const roomId = btn.dataset.roomId;
       if (!roomId) return;
-
-      try {
-        const ownerUserId = btn.dataset.roomOwnerId || '';
-        if (state.user?.id && ownerUserId === state.user.id) {
-          state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}`);
-        } else {
-          const password = window.prompt(t('roomPassword')) || '';
-          const payload = { spectator: false };
-          if (password.trim() !== '') payload.password = password.trim();
-          state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}/join`, {
-            method: 'POST',
-            body: JSON.stringify(payload),
-          });
-        }
-        subscribeRoomSocket(state.activeRoom.roomId);
-        emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
-        state.activeTab = 'home';
-        setStatus('homeStatus', `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
-        render();
-      } catch (e) {
-        setStatus('lobbyStatus', e.message);
+      const ownerUserId = btn.dataset.roomOwnerId || '';
+      const needsPassword = btn.dataset.roomHasPassword === '1';
+      if (state.user?.id && ownerUserId === state.user.id) {
+        await joinLobbyRequest(render, roomId, ownerUserId);
+        return;
       }
+      state.joinLobbyModalOpen = true;
+      state.joinLobbyRoomId = roomId;
+      state.joinLobbyOwnerUserId = ownerUserId;
+      state.joinLobbyNeedsPassword = needsPassword;
+      render();
     });
   });
 };
@@ -442,6 +630,10 @@ export const bindProfileEvents = (render) => {
       setStatus('profileStatus', e.message);
     }
   });
+};
+
+export const bindRoomManagePageEvents = (render) => {
+  bindRoomManageEvents(render);
 };
 
 export const bindAdminEvents = () => {
