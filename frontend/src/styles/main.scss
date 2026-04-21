@@ -110,6 +110,45 @@ button,
 .tab,
 .chip { cursor: pointer; }
 
+
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--outline) 70%, var(--line));
+  background: color-mix(in srgb, var(--surface-soft) 75%, transparent);
+  display: inline-grid;
+  place-content: center;
+  margin: 0 6px 0 0;
+  cursor: pointer;
+  transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+
+input[type="checkbox"]::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  transform: scale(0);
+  transition: transform .12s ease-in-out;
+  clip-path: polygon(14% 44%, 0 59%, 39% 97%, 100% 24%, 84% 10%, 38% 68%);
+  background: var(--button-text);
+}
+
+input[type="checkbox"]:checked {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: 0 0 0 1px rgba(231, 220, 255, .1), 0 0 12px rgba(174, 142, 255, .22);
+}
+
+input[type="checkbox"]:checked::before { transform: scale(1); }
+
+input[type="checkbox"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(167, 138, 241, .42);
+}
+
 input.input-error,
 select.input-error {
   border-color: #ff6b81;

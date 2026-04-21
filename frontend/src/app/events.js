@@ -293,14 +293,18 @@ export const bindCommonEvents = (render) => {
 
   document.querySelector('[data-act="toggleAuth"]')?.addEventListener('click', () => openAuth(render, 'login'));
 
-  document.querySelector('[data-act="heroCreate"]')?.addEventListener('click', () => {
-    if (!state.user) return openAuth(render, 'login');
-    openRoomModal(render, 'create');
+  document.querySelectorAll('[data-act="heroCreate"]').forEach((node) => {
+    node.addEventListener('click', () => {
+      if (!state.user) return openAuth(render, 'login');
+      openRoomModal(render, 'create');
+    });
   });
 
-  document.querySelector('[data-act="heroJoin"]')?.addEventListener('click', () => {
-    if (!state.user) return openAuth(render, 'login');
-    openRoomModal(render, 'join');
+  document.querySelectorAll('[data-act="heroJoin"]').forEach((node) => {
+    node.addEventListener('click', () => {
+      if (!state.user) return openAuth(render, 'login');
+      openRoomModal(render, 'join');
+    });
   });
 
   document.querySelectorAll('[data-act="closeAuth"]').forEach((node) => {
