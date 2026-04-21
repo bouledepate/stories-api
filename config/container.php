@@ -22,6 +22,7 @@ return static function (array $env): ContainerBuilder {
     $jwtSecret = (string) ($env['JWT_SECRET'] ?? 'change-me');
     $disconnectGraceSeconds = (int) ($env['DISCONNECT_GRACE_SECONDS'] ?? 30);
     $inviteRotateCooldownSeconds = (int) ($env['INVITE_ROTATE_COOLDOWN_SECONDS'] ?? 60);
+    $appLogFile = (string) ($env['APP_LOG_FILE'] ?? (__DIR__ . '/../var/logs/app.log'));
 
     $builder = new ContainerBuilder();
     $builder->addDefinitions([
@@ -29,8 +30,14 @@ return static function (array $env): ContainerBuilder {
         RedisConfig::class => static fn (): RedisConfig => RedisConfig::fromEnv($env),
         JwtService::class => static fn (): JwtService => new JwtService($jwtSecret),
         Validator::class => static fn (): Validator => new Validator(),
-        LoggerInterface::class => static function (): LoggerInterface {
+        LoggerInterface::class => static function () use ($appLogFile): LoggerInterface {
+            $logDir = dirname($appLogFile);
+            if (!is_dir($logDir)) {
+                mkdir($logDir, 0777, true);
+            }
+
             $logger = new Logger('stories-api');
+            $logger->pushHandler(new StreamHandler($appLogFile, Level::Debug));
             $logger->pushHandler(new StreamHandler('php://stderr', Level::Debug));
 
             return $logger;

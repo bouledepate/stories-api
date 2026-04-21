@@ -23,7 +23,7 @@ Vertical Slice backend scaffold for a turn-based board game API with modern web 
 This project uses **Vertical Slice Architecture**:
 
 - `src/Slices/Auth` — registration, login, me
-- `src/Slices/Rooms` — room lifecycle + round actions
+- `src/Slices/Rooms` — room lifecycle, lobby and room management
 - `src/Slices/Admin` — card management endpoints
 - `src/Shared` — shared concerns (DB, auth, responder, websocket)
 
@@ -93,8 +93,8 @@ Translations are stored in PHP message files: `messages/en/app.php` and `message
 
 ### Client -> server
 - `{"type":"ping"}`
-- `{"type":"subscribe_room","roomId":"..."}`
-- `{"type":"room_event","roomId":"...","event":"...","data":{...}}`
+- `{"type":"subscribe_room","roomId":"...","token":"<jwt>"}`
+- `{"type":"room_event","roomId":"...","event":"...","data":{...},"token":"<jwt>"}`
 
 ### Server -> client
 - `connected`
@@ -102,6 +102,7 @@ Translations are stored in PHP message files: `messages/en/app.php` and `message
 - `presence`
 - `room_event`
 - `error`
+- `room_event` with `event=access_denied` and `data.reason in [banned, not_in_room]` when access is revoked
 
 ## Docker Compose
 
@@ -128,6 +129,17 @@ The app auto-loads `.env` from project root if present.
 - `DISCONNECT_GRACE_SECONDS` (default: `30`)
 - `WS_HOST` (default: `0.0.0.0`)
 - `WS_PORT` (default: `8081`)
+- `APP_LOG_FILE` (default: `var/logs/app.log`)
+- `WS_LOG_FILE` (default: `var/logs/ws.log`)
+
+### Logs
+
+- HTTP application logs are written to `APP_LOG_FILE` and stderr.
+- WebSocket server logs are written to stdout and to `WS_LOG_FILE` (if set).
+- For Docker usage, ensure write permissions for:
+  - `var/logs/app.log`
+  - `var/logs/ws.log`
+  - or the full `var/logs/` directory.
 
 ## Migrations
 

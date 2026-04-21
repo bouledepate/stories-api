@@ -7,8 +7,6 @@ namespace Stories\Slices\Rooms\Service;
 use Stories\Shared\Exception\ApiException;
 use Stories\Shared\Http\ApiErrorCode;
 use Stories\Shared\Security\AuthenticatedUser;
-use Stories\Slices\Rooms\Domain\GameState;
-use Stories\Slices\Rooms\Dto\ActionRequest;
 use Stories\Slices\Rooms\Dto\CreateRoomRequest;
 
 final class RoomService
@@ -17,11 +15,7 @@ final class RoomService
         private readonly RoomRepository $roomRepository,
         private readonly ParticipantRepository $participantRepository,
         private readonly RoomBanRepository $roomBanRepository,
-        private readonly GameRepository $gameRepository,
         private readonly RoomSnapshotBuilder $snapshotBuilder,
-        private readonly RoundFactory $roundFactory,
-        private readonly RoundStateService $roundStateService,
-        private readonly int $disconnectGraceSeconds = 30,
         private readonly int $inviteRotateCooldownSeconds = 60
     ) {
     }
@@ -107,57 +101,25 @@ final class RoomService
     public function start(string $roomId, AuthenticatedUser $actor): array
     {
         $room = $this->requireRoom($roomId);
-        if ($room->ownerUserId !== $actor->id) {
-            throw new ApiException(ApiErrorCode::ONLY_OWNER_CAN_START_GAME);
-        }
+        $this->ensureOwner($room, $actor);
 
-        $playerIds = $this->participantRepository->fetchReadyPlayerIds($roomId);
-        if (count($playerIds) < 2) {
-            throw new ApiException(ApiErrorCode::NEED_READY_PLAYERS);
-        }
-
-        $state = new GameState(
-            0,
-            [],
-            array_fill_keys($playerIds, 0),
-            $this->roundFactory->create($playerIds, $playerIds[0], 0)
-        );
-
-        $this->gameRepository->upsert($this->uuid(), $roomId, $state);
-        $this->roomRepository->updateStatus($roomId, 'in_game');
-
-        return $this->snapshot($roomId, $actor->id);
-    }
-
-    /** @return array<string, mixed> */
-    public function action(string $roomId, AuthenticatedUser $actor, ActionRequest $request): array
-    {
-        $game = $this->requireGame($roomId);
-        $state = $this->decodeState($game->stateJson);
-
-        $result = $this->roundStateService->applyAction($state, $actor, $request);
-        $this->gameRepository->persistState($game->id, $state);
-
-        return $result;
+        return [
+            'message' => 'Пока не реализовано',
+            'state' => $this->snapshot($roomId, $actor->id),
+        ];
     }
 
     /** @return array<string, mixed> */
     public function state(string $roomId, ?string $requesterId = null): array
     {
-        if ($requesterId !== null && $this->roomBanRepository->isBanned($roomId, $requesterId)) {
-            throw new ApiException(ApiErrorCode::USER_BLOCKED_IN_ROOM);
+        if ($requesterId !== null) {
+            if ($this->roomBanRepository->isBanned($roomId, $requesterId)) {
+                throw new ApiException(ApiErrorCode::USER_BLOCKED_IN_ROOM);
+            }
+
+            $this->ensureParticipantExists($roomId, $requesterId);
         }
-        $this->resolveDisconnectTimeouts($roomId);
-
         return $this->snapshot($roomId, $requesterId);
-    }
-
-    public function markDisconnected(string $roomId, string $userId): void
-    {
-        $game = $this->requireGame($roomId);
-        $state = $this->decodeState($game->stateJson);
-        $state->markDisconnected($userId, time() + $this->disconnectGraceSeconds);
-        $this->gameRepository->persistState($game->id, $state);
     }
 
     /** @return array<string, mixed> */
@@ -224,19 +186,6 @@ final class RoomService
         return $this->snapshot($roomId, $actor->id);
     }
 
-    private function resolveDisconnectTimeouts(string $roomId): void
-    {
-        $game = $this->gameRepository->findByRoomId($roomId);
-        if ($game === null) {
-            return;
-        }
-
-        $state = $this->decodeState($game->stateJson);
-        if ($this->roundStateService->resolveDisconnectTimeouts($state, time())) {
-            $this->gameRepository->persistState($game->id, $state);
-        }
-    }
-
     private function ensureParticipantExists(string $roomId, string $userId): void
     {
         if (!$this->participantRepository->exists($roomId, $userId)) {
@@ -265,23 +214,6 @@ final class RoomService
         }
 
         return $room;
-    }
-
-    private function requireGame(string $roomId): GameRecord
-    {
-        $game = $this->gameRepository->findByRoomId($roomId);
-        if ($game === null) {
-            throw new ApiException(ApiErrorCode::GAME_NOT_STARTED);
-        }
-
-        return $game;
-    }
-
-    private function decodeState(string $json): GameState
-    {
-        $payload = json_decode($json, true);
-
-        return GameState::fromPayload(is_array($payload) ? $payload : []);
     }
 
     private function uuid(): string

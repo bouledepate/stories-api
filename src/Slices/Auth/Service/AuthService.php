@@ -51,14 +51,6 @@ final class AuthService
             'created_at' => gmdate(DATE_ATOM),
         ]);
 
-        $this->db->insert('user_stats', [
-            'user_id' => $id,
-            'wins' => 0,
-            'losses' => 0,
-            'victory_tokens' => 0,
-            'eliminated_with_3' => 0,
-        ]);
-
         $this->logFlow('auth.register.success', ['userId' => $id, 'username' => $request->username, 'role' => $role]);
 
         return $this->tokenPayload($id, $request->username, $role);
@@ -162,9 +154,8 @@ final class AuthService
     public function me(string $userId): array
     {
         $row = $this->db->createQueryBuilder()
-            ->select('u.id', 'u.username', 'u.role', 's.wins', 's.losses', 's.victory_tokens', 's.eliminated_with_3')
+            ->select('u.id', 'u.username', 'u.role')
             ->from('users', 'u')
-            ->innerJoin('u', 'user_stats', 's', 's.user_id = u.id')
             ->where('u.id = :id')
             ->setParameter('id', $userId)
             ->fetchAssociative();
@@ -177,10 +168,6 @@ final class AuthService
             'id' => $row['id'],
             'username' => $row['username'],
             'role' => $row['role'],
-            'wins' => (int) $row['wins'],
-            'losses' => (int) $row['losses'],
-            'victoryTokens' => (int) $row['victory_tokens'],
-            'eliminatedWith3' => (int) $row['eliminated_with_3'],
         ];
     }
 

@@ -316,15 +316,6 @@ export const renderProfile = () => {
           <button class="secondary" data-act="changePassword">${t('changePassword')}</button>
         </div>
       </article>
-      <article>
-        <h3>${t('stats')}</h3>
-        <ul>
-          <li>${t('wins')}: <b>${state.user.wins}</b></li>
-          <li>${t('losses')}: <b>${state.user.losses}</b></li>
-          <li>${t('vt')}: <b>${state.user.victoryTokens}</b></li>
-          <li>${t('elim3')}: <b>${state.user.eliminatedWith3}</b></li>
-        </ul>
-      </article>
     </div>
     <div id="profileStatus" class="status"></div>
   `;

@@ -45,4 +45,11 @@ final class SocketMessage
 
         return is_string($value) && $value !== '' ? $value : null;
     }
+
+    public function token(): ?string
+    {
+        $value = $this->payload['token'] ?? null;
+
+        return is_string($value) && trim($value) !== '' ? trim($value) : null;
+    }
 }
