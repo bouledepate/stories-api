@@ -19,6 +19,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       JWT_SECRET: ${JWT_SECRET:-change-me}
       DISCONNECT_GRACE_SECONDS: ${DISCONNECT_GRACE_SECONDS:-30}
+      APP_LOG_FILE: ${APP_LOG_FILE:-/app/var/logs/app.log}
     volumes:
       - ./var:/app/var
     depends_on:
@@ -42,6 +43,10 @@ services:
       DB_NAME: ${DB_NAME:-stories}
       DB_USER: ${DB_USER:-stories}
       DB_PASSWORD: ${DB_PASSWORD:-stories}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      WS_LOG_FILE: ${WS_LOG_FILE:-/app/var/logs/ws.log}
+    volumes:
+      - ./var:/app/var
     depends_on:
       - api
 

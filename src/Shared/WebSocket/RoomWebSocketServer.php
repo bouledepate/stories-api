@@ -18,6 +18,7 @@ final class RoomWebSocketServer implements MessageComponentInterface
     private SplObjectStorage $clients;
     private ?Connection $runtimeDb = null;
     private ?JwtService $runtimeJwt = null;
+    private ?string $logFile = null;
 
     public function __construct(
         private readonly ?Connection $db = null,
@@ -30,6 +31,7 @@ final class RoomWebSocketServer implements MessageComponentInterface
     {
         $state = ConnectionState::create();
         $this->clients[$connection] = $state;
+        $this->log('ws.open', ['clientId' => $state->clientId]);
 
         $this->send($connection, [
             'type' => 'connected',
@@ -44,12 +46,14 @@ final class RoomWebSocketServer implements MessageComponentInterface
         $message = is_array($decoded) ? SocketMessage::fromDecoded($decoded) : null;
 
         if ($message === null) {
+            $this->log('ws.invalid_payload');
             $this->send($connection, ['type' => 'error', 'message' => 'Invalid payload']);
 
             return;
         }
 
         if ($message->type === 'ping') {
+            $this->log('ws.ping');
             $this->send($connection, ['type' => 'pong', 'timestamp' => time()]);
 
             return;
@@ -80,6 +84,7 @@ final class RoomWebSocketServer implements MessageComponentInterface
         }
 
         $this->send($connection, ['type' => 'error', 'message' => sprintf('Unknown message type: %s', $message->type)]);
+        $this->log('ws.unknown_message_type', ['type' => $message->type]);
     }
 
     public function onClose(ConnectionInterface $connection): void
@@ -91,6 +96,7 @@ final class RoomWebSocketServer implements MessageComponentInterface
         /** @var ConnectionState $state */
         $state = $this->clients[$connection];
         unset($this->clients[$connection]);
+        $this->log('ws.close', ['clientId' => $state->clientId, 'roomId' => $state->roomId, 'userId' => $state->userId]);
 
         if ($state->roomId === null) {
             return;
@@ -106,6 +112,12 @@ final class RoomWebSocketServer implements MessageComponentInterface
 
     public function onError(ConnectionInterface $connection, \Exception $exception): void
     {
+        $state = isset($this->clients[$connection]) ? $this->clients[$connection] : null;
+        $this->log('ws.error', [
+            'clientId' => $state instanceof ConnectionState ? $state->clientId : null,
+            'userId' => $state instanceof ConnectionState ? $state->userId : null,
+            'message' => $exception->getMessage(),
+        ]);
         $this->send($connection, [
             'type' => 'error',
             'message' => 'Connection error',
@@ -127,6 +139,7 @@ final class RoomWebSocketServer implements MessageComponentInterface
         $state = $this->clients[$connection];
 
         if (!$this->authenticate($state, $message)) {
+            $this->log('ws.auth_required', ['clientId' => $state->clientId, 'context' => 'subscribe_room', 'roomId' => $roomId]);
             $this->send($connection, ['type' => 'error', 'message' => 'Authentication required']);
 
             return;
@@ -135,6 +148,7 @@ final class RoomWebSocketServer implements MessageComponentInterface
         $accessReason = $this->roomAccessDeniedReason((string) $state->userId, $roomId);
         if ($accessReason !== null) {
             $state->roomId = null;
+            $this->log('ws.access_denied', ['clientId' => $state->clientId, 'userId' => $state->userId, 'roomId' => $roomId, 'reason' => $accessReason]);
             $this->send($connection, [
                 'type' => 'room_event',
                 'roomId' => $roomId,
@@ -147,6 +161,7 @@ final class RoomWebSocketServer implements MessageComponentInterface
         }
 
         $state->roomId = $roomId;
+        $this->log('ws.subscribe_room', ['clientId' => $state->clientId, 'userId' => $state->userId, 'roomId' => $roomId]);
 
         $this->broadcastToRoom($roomId, [
             'type' => 'presence',
@@ -168,6 +183,7 @@ final class RoomWebSocketServer implements MessageComponentInterface
         }
 
         if (!$this->authenticate($state, $message)) {
+            $this->log('ws.auth_required', ['clientId' => $state->clientId, 'context' => 'room_event', 'roomId' => $roomId]);
             $this->send($connection, ['type' => 'error', 'message' => 'Authentication required']);
 
             return;
@@ -176,6 +192,7 @@ final class RoomWebSocketServer implements MessageComponentInterface
         $accessReason = $this->roomAccessDeniedReason((string) $state->userId, $roomId);
         if ($accessReason !== null) {
             $state->roomId = null;
+            $this->log('ws.access_denied', ['clientId' => $state->clientId, 'userId' => $state->userId, 'roomId' => $roomId, 'reason' => $accessReason]);
             $this->send($connection, [
                 'type' => 'room_event',
                 'roomId' => $roomId,
@@ -187,10 +204,12 @@ final class RoomWebSocketServer implements MessageComponentInterface
             return;
         }
 
+        $eventName = $message->eventName();
+        $this->log('ws.room_event', ['clientId' => $state->clientId, 'userId' => $state->userId, 'roomId' => $roomId, 'event' => $eventName]);
         $this->broadcastToRoom($roomId, [
             'type' => 'room_event',
             'roomId' => $roomId,
-            'event' => $message->eventName(),
+            'event' => $eventName,
             'data' => $message->eventData(),
             'from' => $state->clientId,
             'userId' => $state->userId,
@@ -204,12 +223,14 @@ final class RoomWebSocketServer implements MessageComponentInterface
         /** @var ConnectionState $state */
         $state = $this->clients[$connection];
         if (!$this->authenticate($state, $message)) {
+            $this->log('ws.auth_required', ['clientId' => $state->clientId, 'context' => 'subscribe_lobbies']);
             $this->send($connection, ['type' => 'error', 'message' => 'Authentication required']);
 
             return;
         }
 
         $state->lobbiesSubscribed = true;
+        $this->log('ws.subscribe_lobbies', ['clientId' => $state->clientId, 'userId' => $state->userId]);
 
         $this->send($connection, [
             'type' => 'lobbies_subscribed',
@@ -222,14 +243,17 @@ final class RoomWebSocketServer implements MessageComponentInterface
         /** @var ConnectionState $state */
         $state = $this->clients[$connection];
         if (!$this->authenticate($state, $message)) {
+            $this->log('ws.auth_required', ['clientId' => $state->clientId, 'context' => 'lobbies_event']);
             $this->send($connection, ['type' => 'error', 'message' => 'Authentication required']);
 
             return;
         }
 
+        $eventName = $message->eventName();
+        $this->log('ws.lobbies_event', ['clientId' => $state->clientId, 'userId' => $state->userId, 'event' => $eventName]);
         $this->broadcastToLobbies([
             'type' => 'lobbies_event',
-            'event' => $message->eventName(),
+            'event' => $eventName,
             'data' => $message->eventData(),
             'from' => $state->clientId,
             'userId' => $state->userId,
@@ -253,9 +277,11 @@ final class RoomWebSocketServer implements MessageComponentInterface
             $payload = $this->jwt()->decode($token);
             $state->userId = isset($payload['sub']) ? (string) $payload['sub'] : null;
             $state->username = isset($payload['username']) ? (string) $payload['username'] : null;
+            $this->log('ws.auth_success', ['clientId' => $state->clientId, 'userId' => $state->userId, 'username' => $state->username]);
 
             return $state->userId !== null && $state->userId !== '';
         } catch (ApiException) {
+            $this->log('ws.auth_failed', ['clientId' => $state->clientId]);
             return false;
         }
     }
@@ -318,6 +344,46 @@ final class RoomWebSocketServer implements MessageComponentInterface
         }
 
         return $this->runtimeJwt;
+    }
+
+    /** @param array<string, mixed> $context */
+    private function log(string $event, array $context = []): void
+    {
+        $payload = [
+            'event' => $event,
+            'ts' => gmdate(DATE_ATOM),
+        ] + $context;
+
+        $line = (string) json_encode($payload, JSON_UNESCAPED_UNICODE) . PHP_EOL;
+        fwrite(STDOUT, $line);
+
+        $logFile = $this->wsLogFile();
+        if ($logFile !== null) {
+            file_put_contents($logFile, $line, FILE_APPEND);
+        }
+    }
+
+    private function wsLogFile(): ?string
+    {
+        if ($this->logFile !== null) {
+            return $this->logFile;
+        }
+
+        $path = trim((string) ($_ENV['WS_LOG_FILE'] ?? ''));
+        if ($path === '') {
+            $this->logFile = null;
+
+            return null;
+        }
+
+        $dir = dirname($path);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0777, true);
+        }
+
+        $this->logFile = $path;
+
+        return $this->logFile;
     }
 
     /** @param array<string, mixed> $payload */
