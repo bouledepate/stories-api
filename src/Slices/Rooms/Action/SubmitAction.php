@@ -24,20 +24,20 @@ final class SubmitAction
     ) {
     }
 
-    /** @param array<string, string> $args */
-    public function __invoke(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    public function __invoke(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         try {
             $actor = $this->auth->user($request);
+            $roomId = (string) ($request->getAttribute('roomId') ?? '');
             /** @var array<string, mixed> $body */
             $body = (array) $request->getParsedBody();
             $dto = ActionRequest::fromArray($body);
             $this->validator->validate($dto);
-            $result = $this->service->action((string) $args['roomId'], $actor, $dto);
+            $result = $this->service->action($roomId, $actor, $dto);
 
             return $this->responder->respond($response, [
                 'result' => $result,
-                'state' => $this->service->state((string) $args['roomId'], $actor->id),
+                'state' => $this->service->state($roomId, $actor->id),
             ]);
         } catch (InvalidArgumentException|RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);

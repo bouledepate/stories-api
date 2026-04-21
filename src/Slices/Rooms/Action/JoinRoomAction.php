@@ -20,11 +20,11 @@ final class JoinRoomAction
     ) {
     }
 
-    /** @param array<string, string> $args */
-    public function __invoke(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    public function __invoke(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         try {
             $actor = $this->auth->user($request);
+            $roomId = (string) ($request->getAttribute('roomId') ?? '');
             /** @var array<string, mixed> $body */
             $body = (array) $request->getParsedBody();
             $spectator = (($request->getQueryParams()['spectator'] ?? 'false') === 'true') || (bool) ($body['spectator'] ?? false);
@@ -32,7 +32,7 @@ final class JoinRoomAction
 
             return $this->responder->respond(
                 $response,
-                $this->service->join((string) $args['roomId'], $actor, $spectator, $password === '' ? null : $password)
+                $this->service->join($roomId, $actor, $spectator, $password === '' ? null : $password)
             );
         } catch (RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);

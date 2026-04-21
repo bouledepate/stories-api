@@ -22,11 +22,12 @@ final class PatchCardAction
     ) {
     }
 
-    /** @param array<string, string> $args */
-    public function __invoke(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    public function __invoke(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         try {
             $actor = $this->auth->user($request);
+            $deck = (string) ($request->getAttribute('deck') ?? '');
+            $cardCode = (string) ($request->getAttribute('cardCode') ?? '');
             if ($actor->role !== 'admin') {
                 throw new ApiException(ApiErrorCode::ADMIN_ROLE_REQUIRED);
             }
@@ -37,7 +38,7 @@ final class PatchCardAction
 
             return $this->responder->respond(
                 $response,
-                $this->service->patch((string) $args['deck'], (string) $args['cardCode'], $dto)
+                $this->service->patch($deck, $cardCode, $dto)
             );
         } catch (\Throwable $exception) {
             return $this->responder->respondError($request, $response, $exception, 403);

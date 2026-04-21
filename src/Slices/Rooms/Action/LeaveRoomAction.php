@@ -20,14 +20,14 @@ final class LeaveRoomAction
     ) {
     }
 
-    /** @param array<string, string> $args */
-    public function __invoke(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    public function __invoke(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         try {
             $actor = $this->auth->user($request);
-            $this->service->leave((string) $args['roomId'], $actor);
+            $roomId = (string) ($request->getAttribute('roomId') ?? '');
+            $this->service->leave($roomId, $actor);
 
-            return $this->responder->respond($response, ['status' => 'left', 'roomId' => $args['roomId']]);
+            return $this->responder->respond($response, ['status' => 'left', 'roomId' => $roomId]);
         } catch (RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }

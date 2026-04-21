@@ -20,13 +20,13 @@ final class StartGameAction
     ) {
     }
 
-    /** @param array<string, string> $args */
-    public function __invoke(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    public function __invoke(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         try {
             $actor = $this->auth->user($request);
+            $roomId = (string) ($request->getAttribute('roomId') ?? '');
 
-            return $this->responder->respond($response, $this->service->start((string) $args['roomId'], $actor));
+            return $this->responder->respond($response, $this->service->start($roomId, $actor));
         } catch (RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }
