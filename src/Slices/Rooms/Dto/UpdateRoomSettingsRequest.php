@@ -6,6 +6,7 @@ namespace Stories\Slices\Rooms\Dto;
 
 use Yiisoft\Validator\Rule\Length;
 use Yiisoft\Validator\Rule\StringValue;
+use Stories\Shared\Validation\BooleanNormalizer;
 
 final class UpdateRoomSettingsRequest
 {
@@ -22,7 +23,7 @@ final class UpdateRoomSettingsRequest
     public static function fromArray(array $data): self
     {
         return new self(
-            (bool) ($data['isPublic'] ?? true),
+            BooleanNormalizer::fromMixed($data['isPublic'] ?? null, true),
             trim((string) ($data['password'] ?? '')),
         );
     }

@@ -7,6 +7,7 @@ namespace Stories\Slices\Rooms\Dto;
 use Yiisoft\Validator\Rule\Length;
 use Yiisoft\Validator\Rule\Required;
 use Yiisoft\Validator\Rule\StringValue;
+use Stories\Shared\Validation\BooleanNormalizer;
 
 final class CreateRoomRequest
 {
@@ -29,7 +30,7 @@ final class CreateRoomRequest
     {
         return new self(
             trim((string) ($data['name'] ?? '')),
-            (bool) ($data['isPublic'] ?? true),
+            BooleanNormalizer::fromMixed($data['isPublic'] ?? null, true),
             trim((string) ($data['password'] ?? ''))
         );
     }

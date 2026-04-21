@@ -157,6 +157,8 @@ export const dictionaries = {
     rolePlayer: 'Игрок',
     roleSpectator: 'Зритель',
     roleSystem: 'Система',
+    roomClosedNotice: 'Комната была закрыта владельцем.',
+    roomManageReadonly: 'Только владелец может менять настройки комнаты.',
   },
   en: {
     appTag: 'Stories',
@@ -316,5 +318,7 @@ export const dictionaries = {
     rolePlayer: 'Player',
     roleSpectator: 'Spectator',
     roleSystem: 'System',
+    roomClosedNotice: 'The room was closed by the owner.',
+    roomManageReadonly: 'Only the owner can change room settings.',
   },
 };

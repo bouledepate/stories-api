@@ -174,34 +174,39 @@ const renderRoomPanel = () => {
 };
 
 const renderRoomManage = () => {
-  if (!state.activeRoom || state.activeRoom.ownerId !== state.user?.id) {
-    return `<article><h3>${t('roomManageTitle')}</h3><p>${t('forbidden')}</p></article>`;
+  if (!state.activeRoom) {
+    return '';
   }
 
+  const canManage = state.activeRoom.ownerId === state.user?.id;
+
   return `
-    <article>
-      <h3>${t('roomManageTitle')}</h3>
-      <div class="stack">
-        <label><input id="manageIsPublic" type="checkbox" ${state.activeRoom.isPublic ? 'checked' : ''} /> ${t('visibilityPublic')}</label>
-        <input id="managePassword" type="password" placeholder="${t('roomPassword')}" />
-        <div class="row">
-          <button class="primary" data-act="saveRoomSettings">${t('saveRoomSettings')}</button>
-          <button class="secondary" data-act="regenInvite">${t('regenerateInvite')}</button>
+    <div class="room-manage-layout">
+      <article class="room-manage-main">
+        <h3>${t('roomManageTitle')}</h3>
+        ${canManage ? `<div class="stack">
+          <label><input id="manageIsPublic" type="checkbox" ${state.activeRoom.isPublic ? 'checked' : ''} /> ${t('visibilityPublic')}</label>
+          <input id="managePassword" type="password" placeholder="${t('roomPassword')}" />
+          <div class="row">
+            <button class="primary" data-act="saveRoomSettings">${t('saveRoomSettings')}</button>
+            <button class="secondary" data-act="regenInvite">${t('regenerateInvite')}</button>
+          </div>
+        </div>` : `<p class="status">${t('roomManageReadonly')}</p>`}
+      </article>
+
+      <article class="room-chat-sidebar">
+        <h3>${t('roomChat')}</h3>
+        <div class="chat-log">
+          ${(state.roomChatMessages || []).map((msg) => `<div class="chat-line role-${esc(msg.role || 'system')}">
+            <b>${esc(msg.username || t('roleSystem'))}</b>: ${esc(msg.text || '')}
+          </div>`).join('')}
         </div>
-      </div>
-    </article>
-    <article>
-      <h3>${t('roomChat')}</h3>
-      <div class="chat-log">
-        ${(state.roomChatMessages || []).map((msg) => `<div class="chat-line role-${esc(msg.role || 'system')}">
-          <b>${esc(msg.username || t('roleSystem'))}</b>: ${esc(msg.text || '')}
-        </div>`).join('')}
-      </div>
-      <div class="row topgap">
-        <input id="roomChatInput" placeholder="${t('chatPlaceholder')}" />
-        <button class="primary" data-act="sendRoomChat">${t('send')}</button>
-      </div>
-    </article>
+        <div class="row topgap">
+          <input id="roomChatInput" placeholder="${t('chatPlaceholder')}" />
+          <button class="primary" data-act="sendRoomChat">${t('send')}</button>
+        </div>
+      </article>
+    </div>
     <div id="roomManageStatus" class="status"></div>
   `;
 };
@@ -210,7 +215,6 @@ export const renderHome = () => {
   return `
     ${renderHero()}
     ${renderLobbyRooms()}
-    ${renderRoomPanel()}
   `;
 };
 
@@ -392,6 +396,16 @@ export const renderControlPanel = () => `
   <pre id="adminOutput" class="json"></pre>
 `;
 
+
+const renderRoomNotice = () => {
+  if (!state.roomNoticeMessage) return '';
+
+  return `<div class="room-notice">
+    <span>${esc(state.roomNoticeMessage)}</span>
+    <button class="chip" data-act="closeRoomNotice">${t('close')}</button>
+  </div>`;
+};
+
 export const renderLayout = () => {
   const authAction = state.user
     ? `<div class="profile-actions"><button class="avatar-btn" data-tab="profile">${esc((state.user.username || 'U').slice(0, 1).toUpperCase())}</button><button class="chip" data-act="logout">${t('logout')}</button></div>`
@@ -407,7 +421,7 @@ export const renderLayout = () => {
       <nav class="main-nav">
         <button class="tab ${state.activeTab === 'home' ? 'active' : ''}" data-tab="home">${t('navHome')}</button>
         <button class="tab ${state.activeTab === 'lobbies' ? 'active' : ''}" data-tab="lobbies">${t('navLobbies')}</button>
-        ${state.activeRoom && state.activeRoom.ownerId === state.user?.id ? `<button class="tab ${state.activeTab === 'roomManage' ? 'active' : ''}" data-tab="roomManage">${t('roomManage')}</button>` : ''}
+        ${state.activeRoom ? `<button class="tab ${state.activeTab === 'roomManage' ? 'active' : ''}" data-tab="roomManage">${t('roomManage')}</button>` : ''}
         <button class="tab ${state.activeTab === 'profile' ? 'active' : ''}" data-tab="profile">${t('navProfile')}</button>
       </nav>
       <div class="topbar-actions">
@@ -420,9 +434,11 @@ export const renderLayout = () => {
       </div>
     </header>
 
+    ${renderRoomNotice()}
+
     <section class="panel ${state.activeTab === 'home' ? '' : 'hidden'} cinematic-panel">${renderHome()}</section>
     <section class="panel ${state.activeTab === 'lobbies' ? '' : 'hidden'} cinematic-panel">${renderLobbies()}</section>
-    <section class="panel ${state.activeTab === 'roomManage' ? '' : 'hidden'} cinematic-panel">${renderRoomManage()}</section>
+    <section class="panel ${state.activeTab === 'roomManage' ? '' : 'hidden'} cinematic-panel">${renderRoomPanel()}${renderRoomManage()}</section>
     <section class="panel ${state.activeTab === 'profile' ? '' : 'hidden'} cinematic-panel">${renderProfile()}</section>
     ${state.user?.role === 'admin' ? `<section class="panel ${state.activeTab === 'control' ? '' : 'hidden'}">${renderControlPanel()}</section>` : ''}
 
