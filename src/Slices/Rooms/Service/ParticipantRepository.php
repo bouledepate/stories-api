@@ -6,6 +6,7 @@ namespace Stories\Slices\Rooms\Service;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\ParameterType;
 
 final class ParticipantRepository
 {
@@ -19,7 +20,7 @@ final class ParticipantRepository
             'room_id' => $roomId,
             'user_id' => $userId,
             'role' => 'owner',
-            'ready' => 0,
+            'ready' => false,
             'joined_at' => gmdate(DATE_ATOM),
         ]);
     }
@@ -33,16 +34,23 @@ final class ParticipantRepository
                 'room_id' => ':roomId',
                 'user_id' => ':userId',
                 'role' => ':role',
-                'ready' => '0',
+                'ready' => ':ready',
                 'joined_at' => ':joinedAt',
             ])
             ->setParameter('roomId', $roomId)
             ->setParameter('userId', $userId)
             ->setParameter('role', $role)
+            ->setParameter('ready', false)
             ->setParameter('joinedAt', gmdate(DATE_ATOM));
 
         $sql = $builder->getSQL() . ' ON CONFLICT(room_id, user_id) DO UPDATE SET role = excluded.role';
-        $this->db->executeStatement($sql, $builder->getParameters());
+        $this->db->executeStatement($sql, $builder->getParameters(), [
+            'roomId' => ParameterType::STRING,
+            'userId' => ParameterType::STRING,
+            'role' => ParameterType::STRING,
+            'ready' => ParameterType::BOOLEAN,
+            'joinedAt' => ParameterType::STRING,
+        ]);
     }
 
     public function remove(string $roomId, string $userId): void
@@ -52,7 +60,7 @@ final class ParticipantRepository
 
     public function setReady(string $roomId, string $userId, bool $ready): void
     {
-        $this->db->update('room_participants', ['ready' => $ready ? 1 : 0], ['room_id' => $roomId, 'user_id' => $userId]);
+        $this->db->update('room_participants', ['ready' => $ready], ['room_id' => $roomId, 'user_id' => $userId]);
     }
 
     public function exists(string $roomId, string $userId): bool
@@ -69,6 +77,20 @@ final class ParticipantRepository
         return $exists !== false;
     }
 
+    public function roleForUser(string $roomId, string $userId): ?string
+    {
+        $role = $this->db->createQueryBuilder()
+            ->select('p.role')
+            ->from('room_participants', 'p')
+            ->where('p.room_id = :roomId')
+            ->andWhere('p.user_id = :userId')
+            ->setParameter('roomId', $roomId)
+            ->setParameter('userId', $userId)
+            ->fetchOne();
+
+        return $role === false ? null : (string) $role;
+    }
+
     /** @return list<string> */
     public function fetchReadyPlayerIds(string $roomId): array
     {
@@ -77,7 +99,7 @@ final class ParticipantRepository
             ->from('room_participants', 'p')
             ->where('p.room_id = :roomId')
             ->andWhere('p.role IN (:roles)')
-            ->andWhere('p.ready = 1')
+            ->andWhere('p.ready = true')
             ->orderBy('p.joined_at')
             ->setParameter('roomId', $roomId)
             ->setParameter('roles', ['owner', 'player'], ArrayParameterType::STRING)
@@ -103,7 +125,7 @@ final class ParticipantRepository
                 'userId' => (string) $row['user_id'],
                 'username' => (string) $row['username'],
                 'role' => (string) $row['role'],
-                'ready' => ((int) $row['ready']) === 1,
+                'ready' => filter_var($row['ready'], FILTER_VALIDATE_BOOLEAN),
             ],
             $rows
         );

@@ -21,6 +21,12 @@ export const state = {
   authMode: 'login',
   roomModalOpen: false,
   roomModalMode: 'create',
+  joinLobbyModalOpen: false,
+  joinLobbyRoomId: '',
+  joinLobbyOwnerUserId: '',
+  joinLobbyNeedsPassword: false,
+  joinLobbyPassword: '',
+  roomChatMessages: [],
   homeStatusMessage: '',
   myRooms: [],
 };

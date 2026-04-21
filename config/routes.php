@@ -19,11 +19,15 @@ use Stories\Slices\Rooms\Action\CreateRoomAction;
 use Stories\Slices\Rooms\Action\GetRoomStateAction;
 use Stories\Slices\Rooms\Action\JoinByInviteCodeAction;
 use Stories\Slices\Rooms\Action\JoinRoomAction;
+use Stories\Slices\Rooms\Action\KickParticipantAction;
 use Stories\Slices\Rooms\Action\LeaveRoomAction;
 use Stories\Slices\Rooms\Action\ListLobbiesAction;
+use Stories\Slices\Rooms\Action\BanParticipantAction;
+use Stories\Slices\Rooms\Action\RegenerateInviteCodeAction;
 use Stories\Slices\Rooms\Action\ReadyAction;
 use Stories\Slices\Rooms\Action\StartGameAction;
 use Stories\Slices\Rooms\Action\SubmitAction;
+use Stories\Slices\Rooms\Action\UpdateRoomSettingsAction;
 
 return static function (App $app): void {
     $app->getRouteCollector()->setDefaultInvocationStrategy(new RequestResponse());
@@ -50,6 +54,10 @@ return static function (App $app): void {
     $app->post('/rooms/{roomId}/ready', ReadyAction::class);
     $app->post('/rooms/{roomId}/start', StartGameAction::class);
     $app->get('/rooms/{roomId}', GetRoomStateAction::class);
+    $app->patch('/rooms/{roomId}/settings', UpdateRoomSettingsAction::class);
+    $app->post('/rooms/{roomId}/invite-code/regenerate', RegenerateInviteCodeAction::class);
+    $app->post('/rooms/{roomId}/participants/{userId}/kick', KickParticipantAction::class);
+    $app->post('/rooms/{roomId}/participants/{userId}/ban', BanParticipantAction::class);
     $app->post('/rooms/{roomId}/actions', SubmitAction::class);
 
     $app->get('/admin/cards', ListCardsAction::class);

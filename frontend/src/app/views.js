@@ -49,19 +49,19 @@ const renderRoomModal = () => {
       </div>
 
       <article class="auth-card">
-        <div class="stack ${createMode ? '' : 'hidden'}">
+        ${createMode ? `
+        <div class="stack">
           <input id="roomName" placeholder="${t('roomName')}" />
           <label><input id="roomIsPublic" type="checkbox" checked /> ${t('visibilityPublic')}</label>
           <input id="roomPassword" placeholder="${t('roomPassword')}" type="password" />
           <button class="primary" data-act="createRoom">${t('createRoom')}</button>
-        </div>
-
-        <div class="stack ${createMode ? 'hidden' : ''}">
+        </div>` : `
+        <div class="stack">
           <input id="inviteCode" placeholder="AB12CD" maxlength="6" />
           <input id="joinPassword" placeholder="${t('roomPassword')}" type="password" />
           <label><input id="joinAsSpectator" type="checkbox" /> ${t('spectator')}</label>
           <button class="secondary" data-act="joinByCode">${t('connect')}</button>
-        </div>
+        </div>`}
       </article>
 
       <div id="homeStatus" class="status">${esc(state.homeStatusMessage || '')}</div>
@@ -107,7 +107,7 @@ const renderLobbyRooms = () => {
               <p>${room.isPublic ? t('visibilityPublic') : t('visibilityPrivate')} • ${room.hasPassword ? t('lobbyHasPassword') : t('lobbyNoPassword')}</p>
             </div>
             <div class="lobby-count">👥 ${room.playersCount} / 8</div>
-            <button class="secondary" data-act="joinLobby" data-room-id="${esc(room.roomId)}" data-room-owner-id="${esc(room.ownerUserId || '')}">${t('joinLobby')}</button>
+            <button class="secondary" data-act="joinLobby" data-room-id="${esc(room.roomId)}" data-room-owner-id="${esc(room.ownerUserId || '')}" data-room-has-password="${room.hasPassword ? '1' : '0'}">${t('joinLobby')}</button>
           </article>
         `).join('')}
       </div>
@@ -117,12 +117,19 @@ const renderLobbyRooms = () => {
 
 const renderParticipant = (participant) => {
   const me = state.user?.id === participant.userId;
+  const isOwnerRoom = state.user?.id && state.activeRoom?.ownerId === state.user.id;
+  const canKick = isOwnerRoom && participant.role === 'player' && participant.userId !== state.activeRoom?.ownerId;
+  const canBan = isOwnerRoom && participant.userId !== state.activeRoom?.ownerId;
   return `
     <li class="participant-item">
       <div>
-        <b>${esc(participant.username)}</b> ${me ? `<span class="inline-note">(${t('youLabel')})</span>` : ''}
+        <b class="role-${esc(participant.role)}">${esc(participant.username)}</b> ${me ? `<span class="inline-note">(${t('youLabel')})</span>` : ''}
       </div>
       <div class="participant-meta">${esc(participant.role)} · ${participant.ready ? 'ready' : 'not ready'}</div>
+      ${(canKick || canBan) ? `<div class="participant-actions">
+        ${canKick ? `<button class="chip" data-act="kickParticipant" data-user-id="${esc(participant.userId)}">${t('kickPlayer')}</button>` : ''}
+        ${canBan ? `<button class="chip" data-act="banParticipant" data-user-id="${esc(participant.userId)}">${t('banPlayer')}</button>` : ''}
+      </div>` : ''}
     </li>
   `;
 };
@@ -140,7 +147,7 @@ const renderRoomPanel = () => {
       <h3>${t('roomDetails')}</h3>
       <div class="room-meta">
         <div><span>${t('roomCode')}:</span> <b>${esc(state.activeRoom.inviteCode || '—')}</b></div>
-        <div><span>${t('roomOwner')}:</span> <b>${esc(state.activeRoom.ownerId || '—')}</b></div>
+        <div><span>${t('roomOwnerName')}:</span> <b>${esc(state.activeRoom.ownerUsername || state.activeRoom.ownerId || '—')}</b></div>
       </div>
       <div class="room-lists">
         <div>
@@ -158,10 +165,44 @@ const renderRoomPanel = () => {
           <button class="secondary" data-act="refreshRoom">${t('refreshRoom')}</button>
           <button class="secondary" data-act="readyRoom">${t('markReady')}</button>
           <button class="primary" data-act="startGame">${t('startGame')}</button>
+          ${isOwner ? `<button class="secondary" data-tab="roomManage">${t('roomManage')}</button>` : ''}
           <button class="chip" data-act="leaveRoom">${isOwner ? t('closeOwnedRoom') : t('leaveRoom')}</button>
         </div>
       </div>
     </article>
+  `;
+};
+
+const renderRoomManage = () => {
+  if (!state.activeRoom || state.activeRoom.ownerId !== state.user?.id) {
+    return `<article><h3>${t('roomManageTitle')}</h3><p>${t('forbidden')}</p></article>`;
+  }
+
+  return `
+    <article>
+      <h3>${t('roomManageTitle')}</h3>
+      <div class="stack">
+        <label><input id="manageIsPublic" type="checkbox" ${state.activeRoom.isPublic ? 'checked' : ''} /> ${t('visibilityPublic')}</label>
+        <input id="managePassword" type="password" placeholder="${t('roomPassword')}" />
+        <div class="row">
+          <button class="primary" data-act="saveRoomSettings">${t('saveRoomSettings')}</button>
+          <button class="secondary" data-act="regenInvite">${t('regenerateInvite')}</button>
+        </div>
+      </div>
+    </article>
+    <article>
+      <h3>${t('roomChat')}</h3>
+      <div class="chat-log">
+        ${(state.roomChatMessages || []).map((msg) => `<div class="chat-line role-${esc(msg.role || 'system')}">
+          <b>${esc(msg.username || t('roleSystem'))}</b>: ${esc(msg.text || '')}
+        </div>`).join('')}
+      </div>
+      <div class="row topgap">
+        <input id="roomChatInput" placeholder="${t('chatPlaceholder')}" />
+        <button class="primary" data-act="sendRoomChat">${t('send')}</button>
+      </div>
+    </article>
+    <div id="roomManageStatus" class="status"></div>
   `;
 };
 
@@ -201,11 +242,35 @@ export const renderLobbies = () => `
           <p>${room.status} • ${room.hasPassword ? t('lobbyHasPassword') : t('lobbyNoPassword')}</p>
         </div>
         <div class="lobby-count">👥 ${room.playersCount} / 8</div>
-        <button class="secondary" data-act="joinLobby" data-room-id="${esc(room.roomId)}" data-room-owner-id="${esc(room.ownerUserId || '')}">${t('joinLobby')}</button>
+        <button class="secondary" data-act="joinLobby" data-room-id="${esc(room.roomId)}" data-room-owner-id="${esc(room.ownerUserId || '')}" data-room-has-password="${room.hasPassword ? '1' : '0'}">${t('joinLobby')}</button>
       </article>
     `).join('')}
   </div>
 `;
+
+const renderJoinLobbyModal = () => {
+  if (!state.joinLobbyModalOpen) return '';
+
+  return `
+    <div class="modal-overlay" data-act="closeJoinLobbyModal"></div>
+    <section class="modal room-modal">
+      <div class="modal-head">
+        <div>
+          <h2>${t('joinLobby')}</h2>
+          <p>${state.joinLobbyNeedsPassword ? t('joinPasswordHint') : t('joinWithoutPasswordHint')}</p>
+        </div>
+        <button class="chip" data-act="closeJoinLobbyModal">${t('close')}</button>
+      </div>
+      <article class="auth-card">
+        <div class="stack">
+          ${state.joinLobbyNeedsPassword ? `<input id="lobbyJoinPassword" placeholder="${t('roomPassword')}" type="password" />` : ''}
+          <button class="primary" data-act="confirmJoinLobby">${t('connect')}</button>
+        </div>
+      </article>
+      <div id="joinLobbyStatus" class="status"></div>
+    </section>
+  `;
+};
 
 const renderMyRooms = () => {
   if (!state.user) return '';
@@ -342,6 +407,7 @@ export const renderLayout = () => {
       <nav class="main-nav">
         <button class="tab ${state.activeTab === 'home' ? 'active' : ''}" data-tab="home">${t('navHome')}</button>
         <button class="tab ${state.activeTab === 'lobbies' ? 'active' : ''}" data-tab="lobbies">${t('navLobbies')}</button>
+        ${state.activeRoom && state.activeRoom.ownerId === state.user?.id ? `<button class="tab ${state.activeTab === 'roomManage' ? 'active' : ''}" data-tab="roomManage">${t('roomManage')}</button>` : ''}
         <button class="tab ${state.activeTab === 'profile' ? 'active' : ''}" data-tab="profile">${t('navProfile')}</button>
       </nav>
       <div class="topbar-actions">
@@ -356,10 +422,13 @@ export const renderLayout = () => {
 
     <section class="panel ${state.activeTab === 'home' ? '' : 'hidden'} cinematic-panel">${renderHome()}</section>
     <section class="panel ${state.activeTab === 'lobbies' ? '' : 'hidden'} cinematic-panel">${renderLobbies()}</section>
+    <section class="panel ${state.activeTab === 'roomManage' ? '' : 'hidden'} cinematic-panel">${renderRoomManage()}</section>
     <section class="panel ${state.activeTab === 'profile' ? '' : 'hidden'} cinematic-panel">${renderProfile()}</section>
     ${state.user?.role === 'admin' ? `<section class="panel ${state.activeTab === 'control' ? '' : 'hidden'}">${renderControlPanel()}</section>` : ''}
 
     ${renderAuthModal()}
     ${renderRoomModal()}
+    ${renderJoinLobbyModal()}
+    <div id="toastContainer" class="toast-container"></div>
   </main>`;
 };

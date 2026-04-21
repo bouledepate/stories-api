@@ -110,6 +110,12 @@ button,
 .tab,
 .chip { cursor: pointer; }
 
+input.input-error,
+select.input-error {
+  border-color: #ff6b81;
+  box-shadow: 0 0 0 1px rgba(255, 107, 129, .35);
+}
+
 .tab.active,
 .chip.active { background: color-mix(in srgb, var(--accent) 35%, transparent); border-color: var(--accent); }
 
@@ -276,6 +282,35 @@ article { padding: 14px; }
 .status { margin: 12px 2px; color: var(--muted); }
 .status.ok { color: var(--success); }
 
+.toast-container {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 120;
+}
+
+.toast {
+  max-width: 360px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(17, 22, 44, .95);
+  box-shadow: var(--glow);
+}
+
+.toast.ok {
+  border-color: rgba(102, 224, 170, .45);
+  color: var(--success);
+}
+
+.toast.error {
+  border-color: rgba(255, 107, 129, .45);
+  color: #ffb8c4;
+}
+
 .log,
 .json {
   margin-top: 12px;
@@ -348,11 +383,27 @@ article { padding: 14px; }
   color: var(--muted);
   font-size: 13px;
 }
+.participant-actions { margin-top: 6px; display: flex; gap: 6px; }
 .inline-note {
   color: var(--muted);
   font-weight: 500;
   font-size: 12px;
 }
+.role-owner { color: #ffd39a; }
+.role-player { color: #9ec6ff; }
+.role-spectator { color: #bfa8ff; }
+.role-system { color: var(--muted); }
+
+.chat-log {
+  min-height: 180px;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+.chat-line { margin-bottom: 6px; font-size: 14px; }
 .room-actions {
   display: flex;
   flex-wrap: wrap;

@@ -11,9 +11,11 @@ final class RoomRecord
         public readonly string $inviteCode,
         public readonly string $name,
         public readonly string $ownerUserId,
+        public readonly string $ownerUsername,
         public readonly string $status,
         public readonly bool $isPublic,
-        public readonly ?string $passwordHash
+        public readonly ?string $passwordHash,
+        public readonly ?string $inviteCodeRegeneratedAt
     ) {
     }
 
@@ -25,9 +27,11 @@ final class RoomRecord
             (string) $row['invite_code'],
             (string) $row['name'],
             (string) $row['owner_user_id'],
+            (string) ($row['owner_username'] ?? ''),
             (string) $row['status'],
             (bool) ($row['is_public'] ?? true),
-            isset($row['password_hash']) && $row['password_hash'] !== '' ? (string) $row['password_hash'] : null
+            isset($row['password_hash']) && $row['password_hash'] !== '' ? (string) $row['password_hash'] : null,
+            isset($row['invite_code_regenerated_at']) && $row['invite_code_regenerated_at'] !== '' ? (string) $row['invite_code_regenerated_at'] : null
         );
     }
 }
