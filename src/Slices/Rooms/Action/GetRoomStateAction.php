@@ -20,12 +20,11 @@ final class GetRoomStateAction
     ) {
     }
 
-    /** @param array<string, string> $args */
-    public function __invoke(ServerRequestInterface $request, ResponseInterface $response, array $args = []): ResponseInterface
+    public function __invoke(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         try {
             $actor = $this->auth->user($request);
-            $roomId = $this->resolveRoomId($request, $args);
+            $roomId = $this->resolveRoomId($request);
 
             return $this->responder->respond($response, $this->service->state($roomId, $actor->id));
         } catch (RuntimeException $exception) {
@@ -33,13 +32,8 @@ final class GetRoomStateAction
         }
     }
 
-    /** @param array<string, string> $args */
-    private function resolveRoomId(ServerRequestInterface $request, array $args): string
+    private function resolveRoomId(ServerRequestInterface $request): string
     {
-        if (($args['roomId'] ?? '') !== '') {
-            return (string) $args['roomId'];
-        }
-
         /** @var object|null $route */
         $route = $request->getAttribute('route');
         if (is_object($route) && method_exists($route, 'getArguments')) {

@@ -24,17 +24,17 @@ final class ReadyAction
     ) {
     }
 
-    /** @param array<string, string> $args */
-    public function __invoke(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    public function __invoke(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         try {
             $actor = $this->auth->user($request);
+            $roomId = (string) ($request->getAttribute('roomId') ?? '');
             /** @var array<string, mixed> $body */
             $body = (array) $request->getParsedBody();
             $dto = ReadyRequest::fromArray($body);
             $this->validator->validate($dto);
 
-            return $this->responder->respond($response, $this->service->ready((string) $args['roomId'], $actor, (bool) $dto->ready));
+            return $this->responder->respond($response, $this->service->ready($roomId, $actor, (bool) $dto->ready));
         } catch (InvalidArgumentException|RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }

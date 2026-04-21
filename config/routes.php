@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App;
-use Slim\Handlers\Strategies\RequestResponseArgs;
+use Slim\Handlers\Strategies\RequestResponse;
 use Stories\Shared\Web\UiIndexAction;
 use Stories\Slices\Admin\Action\ListCardsAction;
 use Stories\Slices\Admin\Action\ListEffectsAction;
@@ -26,7 +26,7 @@ use Stories\Slices\Rooms\Action\StartGameAction;
 use Stories\Slices\Rooms\Action\SubmitAction;
 
 return static function (App $app): void {
-    $app->getRouteCollector()->setDefaultInvocationStrategy(new RequestResponseArgs());
+    $app->getRouteCollector()->setDefaultInvocationStrategy(new RequestResponse());
 
     $app->get('/', UiIndexAction::class);
 
