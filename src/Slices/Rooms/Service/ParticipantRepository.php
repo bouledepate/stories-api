@@ -76,7 +76,12 @@ final class ParticipantRepository
 
     public function setReady(string $roomId, string $userId, bool $ready): void
     {
-        $this->db->update('room_participants', ['ready' => $ready], ['room_id' => $roomId, 'user_id' => $userId]);
+        $this->db->update(
+            'room_participants',
+            ['ready' => $ready],
+            ['room_id' => $roomId, 'user_id' => $userId],
+            ['ready' => ParameterType::BOOLEAN, 'room_id' => ParameterType::STRING, 'user_id' => ParameterType::STRING]
+        );
     }
 
     public function exists(string $roomId, string $userId): bool

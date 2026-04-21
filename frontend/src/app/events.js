@@ -54,7 +54,10 @@ const markFieldError = (selector, message) => {
 
 const sendSocketMessage = (payload) => {
   if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return;
-  state.socket.send(JSON.stringify(payload));
+  state.socket.send(JSON.stringify({
+    ...payload,
+    token: state.token || undefined,
+  }));
 };
 
 const emitLobbiesChanged = (event, data = {}) => {
@@ -94,6 +97,24 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
       await refreshLobbies();
 
       const changedRoomId = payload?.data?.roomId;
+      const changedUserId = payload?.data?.userId;
+      if (
+        changedRoomId
+        && state.activeRoom?.roomId === changedRoomId
+        && changedUserId
+        && state.user?.id === changedUserId
+        && (payload?.event === 'room_participant_kicked' || payload?.event === 'room_participant_banned')
+      ) {
+        state.activeRoom = null;
+        state.activeTab = 'home';
+        const message = payload?.event === 'room_participant_banned' ? t('blockedNotice') : t('kickedFromRoomNotice');
+        state.roomNoticeMessage = message;
+        showToast(message);
+        render();
+
+        return;
+      }
+
       if (changedRoomId && state.activeRoom?.roomId === changedRoomId) {
         try {
           state.activeRoom = await callApi(`/rooms/${encodeURIComponent(changedRoomId)}`);
@@ -112,6 +133,17 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
     }
 
     if (payload?.type === 'room_event' && payload?.roomId && state.activeRoom?.roomId === payload.roomId) {
+      if (payload?.event === 'access_denied') {
+        state.activeRoom = null;
+        state.activeTab = 'home';
+        const message = payload?.data?.reason === 'banned' ? t('blockedNotice') : t('kickedFromRoomNotice');
+        state.roomNoticeMessage = message;
+        showToast(message);
+        render();
+
+        return;
+      }
+
       if (payload?.event === 'chat_message' && payload?.data?.text) {
         state.roomChatMessages = [
           ...state.roomChatMessages,
@@ -328,6 +360,9 @@ export const bindCommonEvents = (render) => {
     state.activeRoom = null;
     state.authOpen = false;
     state.roomNoticeMessage = '';
+    if (state.socket?.readyState === WebSocket.OPEN) {
+      state.socket.close();
+    }
     localStorage.removeItem('stories_token');
     render();
   });
@@ -778,21 +813,21 @@ export const bindDebugEvents = () => {
 
   ui.subscribeRoom?.addEventListener('click', () => {
     if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return logDebug(t('connectSocketFirst'));
-    state.socket.send(JSON.stringify({ type: 'subscribe_room', roomId: safeTextValue('#roomId', 64) }));
+    sendSocketMessage({ type: 'subscribe_room', roomId: safeTextValue('#roomId', 64) });
   });
 
   ui.sendPing?.addEventListener('click', () => {
     if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return logDebug(t('connectSocketFirst'));
-    state.socket.send(JSON.stringify({ type: 'ping' }));
+    sendSocketMessage({ type: 'ping' });
   });
 
   ui.sendEvent?.addEventListener('click', () => {
     if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return logDebug(t('connectSocketFirst'));
-    state.socket.send(JSON.stringify({
+    sendSocketMessage({
       type: 'room_event',
       roomId: safeTextValue('#roomId', 64),
       event: safeTextValue('#eventName', 128),
       data: { source: 'frontend' },
-    }));
+    });
   });
 };

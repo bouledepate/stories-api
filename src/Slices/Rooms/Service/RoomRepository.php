@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Stories\Slices\Rooms\Service;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\ParameterType;
 use Stories\Shared\Validation\BooleanNormalizer;
 
 final class RoomRepository
@@ -15,17 +16,31 @@ final class RoomRepository
 
     public function create(string $roomId, string $inviteCode, string $name, string $ownerUserId, bool $isPublic, ?string $passwordHash): void
     {
-        $this->db->insert('rooms', [
-            'id' => $roomId,
-            'invite_code' => $inviteCode,
-            'name' => $name,
-            'owner_user_id' => $ownerUserId,
-            'status' => 'lobby',
-            'is_public' => $isPublic ? 1 : 0,
-            'password_hash' => $passwordHash,
-            'invite_code_regenerated_at' => null,
-            'created_at' => gmdate(DATE_ATOM),
-        ]);
+        $this->db->insert(
+            'rooms',
+            [
+                'id' => $roomId,
+                'invite_code' => $inviteCode,
+                'name' => $name,
+                'owner_user_id' => $ownerUserId,
+                'status' => 'lobby',
+                'is_public' => $isPublic,
+                'password_hash' => $passwordHash,
+                'invite_code_regenerated_at' => null,
+                'created_at' => gmdate(DATE_ATOM),
+            ],
+            [
+                'id' => ParameterType::STRING,
+                'invite_code' => ParameterType::STRING,
+                'name' => ParameterType::STRING,
+                'owner_user_id' => ParameterType::STRING,
+                'status' => ParameterType::STRING,
+                'is_public' => ParameterType::BOOLEAN,
+                'password_hash' => ParameterType::STRING,
+                'invite_code_regenerated_at' => ParameterType::STRING,
+                'created_at' => ParameterType::STRING,
+            ]
+        );
     }
 
     public function updateStatus(string $roomId, string $status): void
@@ -90,10 +105,15 @@ final class RoomRepository
 
     public function updateSettings(string $roomId, bool $isPublic, ?string $passwordHash): void
     {
-        $this->db->update('rooms', [
-            'is_public' => $isPublic,
-            'password_hash' => $passwordHash,
-        ], ['id' => $roomId]);
+        $this->db->update(
+            'rooms',
+            [
+                'is_public' => $isPublic,
+                'password_hash' => $passwordHash,
+            ],
+            ['id' => $roomId],
+            ['is_public' => ParameterType::BOOLEAN, 'password_hash' => ParameterType::STRING, 'id' => ParameterType::STRING]
+        );
     }
 
     public function rotateInviteCode(string $roomId, string $inviteCode): void

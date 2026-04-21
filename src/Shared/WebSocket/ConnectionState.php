@@ -9,7 +9,9 @@ final class ConnectionState
     public function __construct(
         public readonly string $clientId,
         public ?string $roomId = null,
-        public bool $lobbiesSubscribed = false
+        public bool $lobbiesSubscribed = false,
+        public ?string $userId = null,
+        public ?string $username = null
     ) {
     }
 

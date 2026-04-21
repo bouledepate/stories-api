@@ -144,8 +144,12 @@ final class RoomService
     /** @return array<string, mixed> */
     public function state(string $roomId, ?string $requesterId = null): array
     {
-        if ($requesterId !== null && $this->roomBanRepository->isBanned($roomId, $requesterId)) {
-            throw new ApiException(ApiErrorCode::USER_BLOCKED_IN_ROOM);
+        if ($requesterId !== null) {
+            if ($this->roomBanRepository->isBanned($roomId, $requesterId)) {
+                throw new ApiException(ApiErrorCode::USER_BLOCKED_IN_ROOM);
+            }
+
+            $this->ensureParticipantExists($roomId, $requesterId);
         }
         $this->resolveDisconnectTimeouts($roomId);
 
