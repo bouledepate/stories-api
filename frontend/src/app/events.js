@@ -26,8 +26,14 @@ const showToast = (message, type = 'error') => {
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
   toast.textContent = message;
-  container.append(toast);
-  window.setTimeout(() => toast.remove(), 3500);
+  container.prepend(toast);
+  window.setTimeout(() => toast.remove(), 4200);
+};
+
+const showApiError = (statusId, error) => {
+  const message = error?.message || t('unknownError');
+  setStatus(statusId, message);
+  showToast(message);
 };
 
 const clearFieldError = (selector) => {
@@ -195,8 +201,7 @@ const joinLobbyRequest = async (render, roomId, ownerUserId, password = '') => {
     render();
     return true;
   } catch (e) {
-    setStatus('homeStatus', e.message);
-    showToast(e.message);
+    showApiError('homeStatus', e);
     return false;
   }
 };
@@ -233,8 +238,7 @@ const bindRoomModalEvents = (render) => {
       render();
     } catch (e) {
       state.homeStatusMessage = e.message;
-      setStatus('homeStatus', e.message);
-      showToast(e.message);
+      showApiError('homeStatus', e);
     }
   });
 
@@ -269,8 +273,7 @@ const bindRoomModalEvents = (render) => {
       render();
     } catch (e) {
       state.homeStatusMessage = e.message;
-      setStatus('homeStatus', e.message);
-      showToast(e.message);
+      showApiError('homeStatus', e);
     }
   });
 };
@@ -379,7 +382,7 @@ export const bindAuthEvents = async (render, loadMe) => {
       state.authOpen = false;
       render();
     } catch (error) {
-      setStatus('authStatus', error.message);
+      showApiError('authStatus', error);
     }
   });
 };
@@ -393,7 +396,7 @@ export const bindHomeEvents = (render) => {
       state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}`);
       render();
     } catch (e) {
-      setStatus('homeStatus', e.message);
+      showApiError('homeStatus', e);
     }
   };
 
@@ -414,7 +417,7 @@ export const bindHomeEvents = (render) => {
       setStatus('homeStatus', t('ready'), true);
       render();
     } catch (e) {
-      setStatus('homeStatus', e.message);
+      showApiError('homeStatus', e);
     }
   });
 
@@ -431,7 +434,7 @@ export const bindHomeEvents = (render) => {
       setStatus('homeStatus', nextReady ? t('statusReady') : t('statusNotReady'), true);
       render();
     } catch (e) {
-      setStatus('homeStatus', e.message);
+      showApiError('homeStatus', e);
     }
   });
 
@@ -445,7 +448,7 @@ export const bindHomeEvents = (render) => {
       setStatus('homeStatus', t('ready'), true);
       render();
     } catch (e) {
-      setStatus('homeStatus', e.message);
+      showApiError('homeStatus', e);
     }
   });
 
@@ -463,7 +466,7 @@ export const bindHomeEvents = (render) => {
       setStatus('homeStatus', t('ready'), true);
       render();
     } catch (e) {
-      setStatus('homeStatus', e.message);
+      showApiError('homeStatus', e);
     }
   });
 
@@ -502,8 +505,7 @@ const bindRoomManageEvents = (render) => {
       showToast(t('roomSettingsSaved'), 'ok');
       render();
     } catch (e) {
-      setStatus('roomManageStatus', e.message);
-      showToast(e.message);
+      showApiError('roomManageStatus', e);
     }
   });
 
@@ -518,8 +520,7 @@ const bindRoomManageEvents = (render) => {
       showToast(t('inviteRegenerated'), 'ok');
       render();
     } catch (e) {
-      setStatus('roomManageStatus', e.message);
-      showToast(e.message);
+      showApiError('roomManageStatus', e);
     }
   });
 
@@ -533,8 +534,7 @@ const bindRoomManageEvents = (render) => {
         emitLobbiesChanged('room_participant_kicked', { roomId: state.activeRoom.roomId, userId, topic: LOBBIES_TOPIC });
         render();
       } catch (e) {
-        setStatus('roomManageStatus', e.message);
-        showToast(e.message);
+        showApiError('roomManageStatus', e);
       }
     });
   });
@@ -549,8 +549,7 @@ const bindRoomManageEvents = (render) => {
         emitLobbiesChanged('room_participant_banned', { roomId: state.activeRoom.roomId, userId, topic: LOBBIES_TOPIC });
         render();
       } catch (e) {
-        setStatus('roomManageStatus', e.message);
-        showToast(e.message);
+        showApiError('roomManageStatus', e);
       }
     });
   });
@@ -582,7 +581,7 @@ export const bindLobbyEvents = (render) => {
       setStatus('lobbyStatus', t('ready'), true);
       render();
     } catch (e) {
-      setStatus('lobbyStatus', e.message);
+      showApiError('lobbyStatus', e);
     }
   };
 
@@ -624,7 +623,7 @@ export const bindProfileEvents = (render) => {
         state.roomNoticeMessage = '';
         render();
       } catch (e) {
-        setStatus('profileStatus', e.message);
+        showApiError('profileStatus', e);
       }
     });
   });
@@ -640,7 +639,7 @@ export const bindProfileEvents = (render) => {
       setStatus('profileStatus', t('profileUpdated'), true);
       render();
     } catch (e) {
-      setStatus('profileStatus', e.message);
+      showApiError('profileStatus', e);
     }
   });
 
@@ -659,7 +658,7 @@ export const bindProfileEvents = (render) => {
       if (nextField) nextField.value = '';
       setStatus('profileStatus', t('passwordChanged'), true);
     } catch (e) {
-      setStatus('profileStatus', e.message);
+      showApiError('profileStatus', e);
     }
   });
 };
@@ -680,7 +679,7 @@ export const bindAdminEvents = () => {
       output.textContent = JSON.stringify(data, null, 2);
       setStatus('adminStatus', t('cardsLoaded', { deck }), true);
     } catch (e) {
-      setStatus('adminStatus', e.message);
+      showApiError('adminStatus', e);
     }
   });
 
@@ -690,7 +689,7 @@ export const bindAdminEvents = () => {
       output.textContent = JSON.stringify(data, null, 2);
       setStatus('adminStatus', t('effectsLoaded'), true);
     } catch (e) {
-      setStatus('adminStatus', e.message);
+      showApiError('adminStatus', e);
     }
   });
 
@@ -715,7 +714,7 @@ export const bindAdminEvents = () => {
       output.textContent = JSON.stringify(data, null, 2);
       setStatus('adminStatus', t('cardUpdated'), true);
     } catch (e) {
-      setStatus('adminStatus', e.message);
+      showApiError('adminStatus', e);
     }
   });
 };

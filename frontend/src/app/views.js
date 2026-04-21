@@ -146,7 +146,7 @@ const renderRoomPanel = () => {
     <article class="room-panel">
       <h3>${t('roomDetails')}</h3>
       <div class="room-meta">
-        <div><span>${t('roomCode')}:</span> <b>${esc(state.activeRoom.inviteCode || '—')}</b></div>
+        <div class="room-code-row"><span>${t('roomCode')}:</span> <b>${esc(state.activeRoom.inviteCode || '—')}</b> ${isOwner ? `<button class="chip room-code-action" data-act="regenInvite">${t('regenerateInvite')}</button>` : ''}</div>
         <div><span>${t('roomOwnerName')}:</span> <b>${esc(state.activeRoom.ownerUsername || state.activeRoom.ownerId || '—')}</b></div>
       </div>
       <div class="room-lists">
@@ -163,9 +163,8 @@ const renderRoomPanel = () => {
         <h4>${t('roomActions')}</h4>
         <div class="room-actions">
           <button class="secondary" data-act="refreshRoom">${t('refreshRoom')}</button>
-          <button class="secondary" data-act="readyRoom">${t('markReady')}</button>
+          <button class="secondary" data-act="readyRoom">${((participants.find((participant) => participant.userId === state.user?.id)?.ready) ? t('markNotReady') : t('markReady'))}</button>
           <button class="primary" data-act="startGame">${t('startGame')}</button>
-          ${isOwner ? `<button class="secondary" data-tab="roomManage">${t('roomManage')}</button>` : ''}
           <button class="chip" data-act="leaveRoom">${isOwner ? t('closeOwnedRoom') : t('leaveRoom')}</button>
         </div>
       </div>
@@ -189,7 +188,6 @@ const renderRoomManage = () => {
           <input id="managePassword" type="password" placeholder="${t('roomPassword')}" />
           <div class="row">
             <button class="primary" data-act="saveRoomSettings">${t('saveRoomSettings')}</button>
-            <button class="secondary" data-act="regenInvite">${t('regenerateInvite')}</button>
           </div>
         </div>` : `<p class="status">${t('roomManageReadonly')}</p>`}
       </article>
