@@ -34,6 +34,6 @@ final class ListLobbiesAction
         $limit = max(1, min(100, (int) ($query['limit'] ?? 12)));
         $offset = max(0, (int) ($query['offset'] ?? 0));
 
-        return $this->responder->respond($response, $this->service->listLobbies($visibility, $passwordFilter, $limit, $offset));
+        return $this->responder->respondFromRequest($request, $response, $this->service->listLobbies($visibility, $passwordFilter, $limit, $offset));
     }
 }

@@ -31,7 +31,7 @@ final class RegisterAction
             $this->validator->validate($dto);
             $token = $this->service->register($dto);
 
-            return $this->responder->respond($response, $token, 201);
+            return $this->responder->respondFromRequest($request, $response, $token, 201);
         } catch (InvalidArgumentException|RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }

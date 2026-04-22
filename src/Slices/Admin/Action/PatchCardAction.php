@@ -36,7 +36,7 @@ final class PatchCardAction
             $body = (array) $request->getParsedBody();
             $dto = PatchCardRequest::fromArray($body);
 
-            return $this->responder->respond(
+            return $this->responder->respondFromRequest($request, 
                 $response,
                 $this->service->patch($deck, $cardCode, $dto)
             );

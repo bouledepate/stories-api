@@ -31,7 +31,7 @@ final class ListCardsAction
 
             $deck = (string) ($request->getQueryParams()['deck'] ?? '');
 
-            return $this->responder->respond($response, $this->service->cards($deck));
+            return $this->responder->respondFromRequest($request, $response, $this->service->cards($deck));
         } catch (\Throwable $exception) {
             return $this->responder->respondError($request, $response, $exception, 403);
         }

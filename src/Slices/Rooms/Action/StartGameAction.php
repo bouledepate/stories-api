@@ -26,7 +26,7 @@ final class StartGameAction
             $actor = $this->auth->user($request);
             $roomId = (string) ($request->getAttribute('roomId') ?? '');
 
-            return $this->responder->respond($response, $this->service->start($roomId, $actor));
+            return $this->responder->respondFromRequest($request, $response, $this->service->start($roomId, $actor));
         } catch (RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }

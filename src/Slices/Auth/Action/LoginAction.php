@@ -30,7 +30,7 @@ final class LoginAction
             $dto = LoginRequest::fromArray($body);
             $this->validator->validate($dto);
 
-            return $this->responder->respond($response, $this->service->login($dto));
+            return $this->responder->respondFromRequest($request, $response, $this->service->login($dto));
         } catch (InvalidArgumentException|RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 401);
         }
