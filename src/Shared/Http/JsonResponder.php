@@ -32,6 +32,16 @@ final class JsonResponder
             ->withStatus($status);
     }
 
+    /** @param array<string, mixed> $payload */
+    public function respondFromRequest(
+        ServerRequestInterface $request,
+        ResponseInterface $response,
+        array $payload,
+        int $status = 200
+    ): ResponseInterface {
+        return $this->respond($response, $payload, $status, $this->resolveLocale($request));
+    }
+
     public function respondError(
         ServerRequestInterface $request,
         ResponseInterface $response,

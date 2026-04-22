@@ -34,7 +34,7 @@ final class ChangePasswordAction
             $this->validator->validate($dto);
             $payload = $this->service->changePassword($user->id, $dto);
 
-            return $this->responder->respond($response, $payload);
+            return $this->responder->respondFromRequest($request, $response, $payload);
         } catch (InvalidArgumentException|RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }

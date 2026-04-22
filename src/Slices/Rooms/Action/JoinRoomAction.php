@@ -32,7 +32,7 @@ final class JoinRoomAction
                 || BooleanNormalizer::fromMixed($body['spectator'] ?? null, false);
             $password = trim((string) ($body['password'] ?? ''));
 
-            return $this->responder->respond(
+            return $this->responder->respondFromRequest($request, 
                 $response,
                 $this->service->join($roomId, $actor, $spectator, $password === '' ? null : $password)
             );

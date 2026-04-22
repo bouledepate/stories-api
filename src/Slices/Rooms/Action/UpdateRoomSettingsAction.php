@@ -34,7 +34,7 @@ final class UpdateRoomSettingsAction
             $dto = UpdateRoomSettingsRequest::fromArray($body);
             $this->validator->validate($dto);
 
-            return $this->responder->respond($response, $this->service->updateSettings($roomId, $actor, $dto->isPublic, $dto->password));
+            return $this->responder->respondFromRequest($request, $response, $this->service->updateSettings($roomId, $actor, $dto->isPublic, $dto->password));
         } catch (InvalidArgumentException|RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }

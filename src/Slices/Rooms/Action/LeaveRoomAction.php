@@ -27,7 +27,7 @@ final class LeaveRoomAction
             $roomId = (string) ($request->getAttribute('roomId') ?? '');
             $this->service->leave($roomId, $actor);
 
-            return $this->responder->respond($response, ['status' => 'left', 'roomId' => $roomId]);
+            return $this->responder->respondFromRequest($request, $response, ['status' => 'left', 'roomId' => $roomId]);
         } catch (RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }

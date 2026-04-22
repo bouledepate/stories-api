@@ -34,7 +34,7 @@ final class ReadyAction
             $dto = ReadyRequest::fromArray($body);
             $this->validator->validate($dto);
 
-            return $this->responder->respond($response, $this->service->ready($roomId, $actor, (bool) $dto->ready));
+            return $this->responder->respondFromRequest($request, $response, $this->service->ready($roomId, $actor, (bool) $dto->ready));
         } catch (InvalidArgumentException|RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }

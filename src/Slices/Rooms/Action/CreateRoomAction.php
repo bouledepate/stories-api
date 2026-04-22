@@ -33,7 +33,7 @@ final class CreateRoomAction
             $dto = CreateRoomRequest::fromArray($body);
             $this->validator->validate($dto);
 
-            return $this->responder->respond($response, $this->service->create($dto, $actor), 201);
+            return $this->responder->respondFromRequest($request, $response, $this->service->create($dto, $actor), 201);
         } catch (InvalidArgumentException|RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }

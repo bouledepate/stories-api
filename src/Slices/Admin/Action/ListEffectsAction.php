@@ -29,7 +29,7 @@ final class ListEffectsAction
                 throw new ApiException(ApiErrorCode::ADMIN_ROLE_REQUIRED);
             }
 
-            return $this->responder->respond($response, $this->service->effects());
+            return $this->responder->respondFromRequest($request, $response, $this->service->effects());
         } catch (\Throwable $exception) {
             return $this->responder->respondError($request, $response, $exception, 403);
         }

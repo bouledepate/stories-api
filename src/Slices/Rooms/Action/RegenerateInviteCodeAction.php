@@ -26,7 +26,7 @@ final class RegenerateInviteCodeAction
             $actor = $this->auth->user($request);
             $roomId = (string) ($request->getAttribute('roomId') ?? '');
 
-            return $this->responder->respond($response, $this->service->regenerateInviteCode($roomId, $actor));
+            return $this->responder->respondFromRequest($request, $response, $this->service->regenerateInviteCode($roomId, $actor));
         } catch (RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }

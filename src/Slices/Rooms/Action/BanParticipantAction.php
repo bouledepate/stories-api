@@ -27,7 +27,7 @@ final class BanParticipantAction
             $roomId = (string) ($request->getAttribute('roomId') ?? '');
             $userId = (string) ($request->getAttribute('userId') ?? '');
 
-            return $this->responder->respond($response, $this->service->ban($roomId, $actor, $userId));
+            return $this->responder->respondFromRequest($request, $response, $this->service->ban($roomId, $actor, $userId));
         } catch (RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }

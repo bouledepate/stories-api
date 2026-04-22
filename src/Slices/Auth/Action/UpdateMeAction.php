@@ -33,7 +33,7 @@ final class UpdateMeAction
             $dto = UpdateProfileRequest::fromArray($body);
             $this->validator->validate($dto);
 
-            return $this->responder->respond($response, $this->service->updateProfile($user->id, $dto));
+            return $this->responder->respondFromRequest($request, $response, $this->service->updateProfile($user->id, $dto));
         } catch (InvalidArgumentException|RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);
         }
