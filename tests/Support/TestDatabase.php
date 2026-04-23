@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Stories\Tests\Support;
 
 use Doctrine\DBAL\Connection;
-use Stories\Shared\Database\ConnectionFactory;
+use Stories\Infrastructure\Persistence\ConnectionFactory;
 
 final class TestDatabase
 {

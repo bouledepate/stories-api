@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Stories\Shared\Security;
 
-use Stories\Shared\Exception\ApiException;
-use Stories\Shared\Http\ApiErrorCode;
+use Stories\Shared\Error\ApiException;
+use Stories\Shared\Error\ApiErrorCode;
 
 final class JwtService
 {

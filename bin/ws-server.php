@@ -7,7 +7,7 @@ use Dotenv\Dotenv;
 use Ratchet\Http\HttpServer;
 use Ratchet\Server\IoServer;
 use Ratchet\WebSocket\WsServer;
-use Stories\Shared\WebSocket\RoomWebSocketServer;
+use Stories\Infrastructure\WebSocket\RoomWebSocketServer;
 
 require __DIR__ . '/../vendor/autoload.php';
 

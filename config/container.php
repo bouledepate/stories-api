@@ -8,10 +8,19 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Level;
 use Monolog\Logger;
 use Psr\Log\LoggerInterface;
-use Stories\Shared\Database\ConnectionFactory;
-use Stories\Shared\Cache\RedisConfig;
+use Stories\Domain\Auth\Repository\AuthUserRepository;
+use Stories\Domain\Rooms\Repository\RoomBansRepository;
+use Stories\Domain\Rooms\Repository\RoomParticipantsRepository;
+use Stories\Domain\Rooms\Repository\RoomsRepository;
+use Stories\Domain\Rooms\Repository\RoomSnapshotProvider;
+use Stories\Infrastructure\Persistence\Auth\DbalAuthUserRepository;
+use Stories\Infrastructure\Persistence\Rooms\DbalRoomBansRepository;
+use Stories\Infrastructure\Persistence\Rooms\DbalRoomParticipantsRepository;
+use Stories\Infrastructure\Persistence\Rooms\DbalRoomsRepository;
+use Stories\Infrastructure\Persistence\Rooms\DbalRoomSnapshotProvider;
+use Stories\Infrastructure\Persistence\ConnectionFactory;
+use Stories\Infrastructure\Cache\RedisConfig;
 use Stories\Shared\Security\JwtService;
-use Stories\Slices\Rooms\Service\RoomService;
 use Yiisoft\Translator\CategorySource;
 use Yiisoft\Translator\Message\Php\MessageSource;
 use Yiisoft\Translator\Translator;
@@ -26,6 +35,11 @@ return static function (array $env): ContainerBuilder {
     $builder = new ContainerBuilder();
     $builder->addDefinitions([
         Connection::class => static fn () => ConnectionFactory::create($env),
+        AuthUserRepository::class => DI\autowire(DbalAuthUserRepository::class),
+        RoomsRepository::class => DI\autowire(DbalRoomsRepository::class),
+        RoomParticipantsRepository::class => DI\autowire(DbalRoomParticipantsRepository::class),
+        RoomBansRepository::class => DI\autowire(DbalRoomBansRepository::class),
+        RoomSnapshotProvider::class => DI\autowire(DbalRoomSnapshotProvider::class),
         RedisConfig::class => static fn (): RedisConfig => RedisConfig::fromEnv($env),
         JwtService::class => static fn (): JwtService => new JwtService($jwtSecret),
         Validator::class => static fn (): Validator => new Validator(),
@@ -48,7 +62,7 @@ return static function (array $env): ContainerBuilder {
 
             return $translator;
         },
-        RoomService::class => DI\autowire()
+        \Stories\Application\Rooms\Support\RoomUseCaseSupport::class => DI\autowire()
             ->constructorParameter('inviteRotateCooldownSeconds', $inviteRotateCooldownSeconds),
     ]);
 
