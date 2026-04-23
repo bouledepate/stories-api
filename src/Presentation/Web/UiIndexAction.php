@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Stories\Shared\Web;
+namespace Stories\Presentation\Web;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;

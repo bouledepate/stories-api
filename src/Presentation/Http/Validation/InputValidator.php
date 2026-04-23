@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Stories\Shared\Validation;
+namespace Stories\Presentation\Http\Validation;
 
 use InvalidArgumentException;
 use Yiisoft\Validator\Validator;
