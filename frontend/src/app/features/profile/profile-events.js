@@ -3,7 +3,8 @@ import { t } from '../../i18n';
 import { safeTextValue } from '../../security';
 import { setStatus, showApiError } from '../../services/feedback';
 import { setUser } from '../../store/mutations';
-import { activateRoomState, isSameActiveRoom, returnToCurrentRoom } from '../rooms/room-flow';
+import { isSameActiveRoom } from '../../store/selectors';
+import { activateRoomState, returnToCurrentRoom } from '../rooms/room-flow';
 
 export const bindProfileEvents = (render) => {
   document.querySelectorAll('[data-act="openOwnedRoom"]').forEach((btn) => {

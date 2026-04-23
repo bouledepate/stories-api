@@ -4,8 +4,9 @@ import { safeTextValue } from '../../security';
 import { state } from '../../state';
 import { setStatus, showApiError } from '../../services/feedback';
 import { setLobbyCatalog, setLobbyFilters } from '../../store/mutations';
+import { isSameActiveRoom } from '../../store/selectors';
 import { openAuth } from '../common/ui-state';
-import { isSameActiveRoom, openJoinLobbyModal, returnToCurrentRoom } from '../rooms/room-flow';
+import { openJoinLobbyModal, returnToCurrentRoom } from '../rooms/room-flow';
 
 export const bindLobbyEvents = (render) => {
   const loadLobbies = async () => {

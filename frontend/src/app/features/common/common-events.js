@@ -18,12 +18,12 @@ import {
   closeRoomModal,
   closeRoomSwitchPrompt,
   executeJoinLobbyRequest,
-  isSameActiveRoom,
   leaveCurrentRoom,
   openRoomModal,
   openRoomSwitchPrompt,
   runPendingJoinAction,
 } from '../rooms/room-flow';
+import { isSameActiveRoom } from '../../store/selectors';
 
 export const bindCommonEvents = (render) => {
   document.querySelectorAll('[data-tab]').forEach((btn) => {
