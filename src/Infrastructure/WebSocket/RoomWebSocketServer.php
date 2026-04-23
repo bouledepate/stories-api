@@ -111,6 +111,12 @@ final class RoomWebSocketServer implements MessageComponentInterface
             'username' => $state->username,
             'timestamp' => time(),
         ]);
+        $this->broadcastLobbyRoomChanged(
+            'room_left',
+            $state->roomId,
+            $state->userId !== null ? (string) $state->userId : null,
+            $state->username
+        );
     }
 
     public function onError(ConnectionInterface $connection, \Exception $exception): void
@@ -175,6 +181,7 @@ final class RoomWebSocketServer implements MessageComponentInterface
             'username' => $state->username,
             'timestamp' => time(),
         ]);
+        $this->broadcastLobbyRoomChanged('room_joined', $roomId, (string) $state->userId, $state->username);
     }
 
     private function handleRoomEvent(ConnectionInterface $connection, SocketMessage $message): void
@@ -228,12 +235,7 @@ final class RoomWebSocketServer implements MessageComponentInterface
     {
         /** @var ConnectionState $state */
         $state = $this->clients[$connection];
-        if (!$this->authenticate($state, $message)) {
-            $this->log('ws.auth_required', ['clientId' => $state->clientId, 'context' => 'subscribe_lobbies']);
-            $this->send($connection, ['type' => 'error', 'message' => 'Authentication required']);
-
-            return;
-        }
+        $this->authenticate($state, $message);
 
         $state->lobbiesSubscribed = true;
         $this->log('ws.subscribe_lobbies', ['clientId' => $state->clientId, 'userId' => $state->userId]);
@@ -457,5 +459,29 @@ final class RoomWebSocketServer implements MessageComponentInterface
                 'timestamp' => time(),
             ]);
         }
+
+        $this->broadcastLobbyRoomChanged($reason === 'banned' ? 'room_participant_banned' : 'room_participant_kicked', $roomId, $userId);
+    }
+
+    private function broadcastLobbyRoomChanged(string $event, string $roomId, ?string $userId = null, ?string $username = null): void
+    {
+        $payload = [
+            'type' => 'lobbies_event',
+            'event' => $event,
+            'data' => ['roomId' => $roomId],
+            'timestamp' => time(),
+        ];
+
+        if ($userId !== null && $userId !== '') {
+            $payload['data']['userId'] = $userId;
+            $payload['userId'] = $userId;
+        }
+
+        if ($username !== null && $username !== '') {
+            $payload['data']['username'] = $username;
+            $payload['username'] = $username;
+        }
+
+        $this->broadcastToLobbies($payload);
     }
 }
