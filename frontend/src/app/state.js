@@ -1,11 +1,13 @@
+import { storage } from './services/storage';
+
 const wsHost = (window.location.hostname === '0.0.0.0' || window.location.hostname === '') ? 'localhost' : window.location.hostname;
 const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-const persistedRoomId = localStorage.getItem('stories_active_room_id') || '';
+const persistedRoomId = storage.readActiveRoomId();
 
 export const state = {
   apiBase: window.location.origin,
   wsUrl: `${wsProtocol}://${wsHost}:8081`,
-  token: localStorage.getItem('stories_token') || '',
+  token: storage.readToken(),
   user: null,
   activeRoom: persistedRoomId ? { roomId: persistedRoomId } : null,
   activeTab: 'home',
@@ -16,7 +18,7 @@ export const state = {
     limit: 20,
   },
   socket: null,
-  lang: localStorage.getItem('stories_lang') || 'ru',
+  lang: storage.readLanguage(),
   authOpen: false,
   authMode: 'login',
   roomModalOpen: false,
