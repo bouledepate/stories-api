@@ -114,6 +114,17 @@ Starts:
 - `api` on `:8080`
 - `ws` on `:8081`
 - `postgres` and `redis` are available inside the compose network (host ports are not bound to avoid local port conflicts).
+- frontend assets are built into the Docker image during `docker compose build` / `docker compose up --build`.
+
+### Auto-rebuild on changes
+
+For development, Docker Compose can watch the project and rebuild application images automatically after file changes:
+
+```bash
+docker compose up --watch
+```
+
+This watches the project source for the `api` and `ws` services and triggers image rebuilds when tracked files change.
 
 ## Environment
 

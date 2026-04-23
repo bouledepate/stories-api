@@ -1,0 +1,6 @@
+.git
+.idea
+.codex
+var
+vendor
+frontend/node_modules

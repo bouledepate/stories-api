@@ -1,7 +1,17 @@
-version: '3.9'
 services:
   api:
     build: .
+    develop:
+      watch:
+        - action: rebuild
+          path: .
+          ignore:
+            - .git/
+            - .idea/
+            - .codex/
+            - var/
+            - vendor/
+            - frontend/node_modules/
     ports:
       - '8080:8080'
     environment:
@@ -30,6 +40,17 @@ services:
 
   ws:
     build: .
+    develop:
+      watch:
+        - action: rebuild
+          path: .
+          ignore:
+            - .git/
+            - .idea/
+            - .codex/
+            - var/
+            - vendor/
+            - frontend/node_modules/
     command: ["php", "bin/ws-server.php"]
     ports:
       - '8081:8081'

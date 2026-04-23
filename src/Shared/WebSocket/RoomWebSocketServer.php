@@ -105,7 +105,10 @@ final class RoomWebSocketServer implements MessageComponentInterface
         $this->broadcastToRoom($state->roomId, [
             'type' => 'presence',
             'roomId' => $state->roomId,
+            'event' => 'left',
             'message' => sprintf('Client %s left room', $state->clientId),
+            'userId' => $state->userId,
+            'username' => $state->username,
             'timestamp' => time(),
         ]);
     }
@@ -166,7 +169,10 @@ final class RoomWebSocketServer implements MessageComponentInterface
         $this->broadcastToRoom($roomId, [
             'type' => 'presence',
             'roomId' => $roomId,
+            'event' => 'joined',
             'message' => sprintf('Client %s joined room', $state->clientId),
+            'userId' => $state->userId,
+            'username' => $state->username,
             'timestamp' => time(),
         ]);
     }
@@ -260,6 +266,16 @@ final class RoomWebSocketServer implements MessageComponentInterface
             'username' => $state->username,
             'timestamp' => time(),
         ]);
+
+        $roomId = $message->roomId();
+        $targetUserId = is_string($message->eventData()['userId'] ?? null) ? (string) $message->eventData()['userId'] : null;
+        if ($roomId !== null && $targetUserId !== null && $targetUserId !== '') {
+            if ($eventName === 'room_participant_kicked') {
+                $this->disconnectUserFromRoom($targetUserId, $roomId, 'kicked');
+            } elseif ($eventName === 'room_participant_banned') {
+                $this->disconnectUserFromRoom($targetUserId, $roomId, 'banned');
+            }
+        }
     }
 
     private function authenticate(ConnectionState $state, SocketMessage $message): bool
@@ -417,6 +433,29 @@ final class RoomWebSocketServer implements MessageComponentInterface
             }
 
             $this->send($connection, $payload);
+        }
+    }
+
+    private function disconnectUserFromRoom(string $userId, string $roomId, string $reason): void
+    {
+        foreach ($this->clients as $connection) {
+            /** @var ConnectionState $state */
+            $state = $this->clients[$connection];
+            if ($state->userId !== $userId) {
+                continue;
+            }
+
+            if ($state->roomId === $roomId) {
+                $state->roomId = null;
+            }
+
+            $this->send($connection, [
+                'type' => 'room_event',
+                'roomId' => $roomId,
+                'event' => 'access_denied',
+                'data' => ['reason' => $reason],
+                'timestamp' => time(),
+            ]);
         }
     }
 }

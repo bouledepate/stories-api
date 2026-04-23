@@ -30,7 +30,7 @@ final class RoomService
         $roomId = $this->uuid();
         $password = trim($request->password);
         $passwordHash = $password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null;
-        $this->roomRepository->create($roomId, $this->generateInviteCode(), $request->name, $actor->id, $request->isPublic, $passwordHash);
+        $this->roomRepository->create($roomId, $this->generateInviteCode(), $request->name, $actor->id, $request->isPublic, $request->maxPlayers, $passwordHash);
         $this->participantRepository->addOwner($roomId, $actor->id);
 
         return $this->snapshot($roomId, $actor->id);
@@ -40,11 +40,25 @@ final class RoomService
     public function join(string $roomId, AuthenticatedUser $actor, bool $spectator, ?string $password = null): array
     {
         $room = $this->requireRoom($roomId);
+        $currentRoomId = $this->participantRepository->findLatestRoomIdForUser($actor->id);
+        if ($currentRoomId !== null) {
+            if ($currentRoomId === $roomId) {
+                return $this->snapshot($roomId, $actor->id);
+            }
+
+            $ownedRoomId = $this->roomRepository->findOwnedRoomId($actor->id);
+            throw new ApiException($ownedRoomId === $currentRoomId
+                ? ApiErrorCode::OWNER_ALREADY_HAS_ROOM
+                : ApiErrorCode::USER_ALREADY_HAS_ACTIVE_ROOM);
+        }
+
         if ($this->roomBanRepository->isBanned($roomId, $actor->id)) {
             throw new ApiException(ApiErrorCode::USER_BLOCKED_IN_ROOM);
         }
-        if ($room->ownerUserId !== $actor->id) {
-            $this->guardPassword($room, $password);
+        $this->guardPassword($room, $password);
+
+        if (!$spectator && $this->participantRepository->countPlayers($roomId) >= $room->maxPlayers) {
+            throw new ApiException(ApiErrorCode::ROOM_IS_FULL);
         }
 
         $role = $spectator ? 'spectator' : 'player';
@@ -92,21 +106,13 @@ final class RoomService
     public function ready(string $roomId, AuthenticatedUser $actor, bool $ready): array
     {
         $this->ensureParticipantExists($roomId, $actor->id);
+        $role = $this->participantRepository->roleForUser($roomId, $actor->id);
+        if ($role !== 'owner' && $role !== 'player') {
+            throw new ApiException(ApiErrorCode::ONLY_ACTIVE_PLAYERS_CAN_TOGGLE_READY);
+        }
         $this->participantRepository->setReady($roomId, $actor->id, $ready);
 
         return $this->snapshot($roomId, $actor->id);
-    }
-
-    /** @return array<string, mixed> */
-    public function start(string $roomId, AuthenticatedUser $actor): array
-    {
-        $room = $this->requireRoom($roomId);
-        $this->ensureOwner($room, $actor);
-
-        return [
-            'message' => 'Пока не реализовано',
-            'state' => $this->snapshot($roomId, $actor->id),
-        ];
     }
 
     /** @return array<string, mixed> */
@@ -122,15 +128,31 @@ final class RoomService
         return $this->snapshot($roomId, $requesterId);
     }
 
+    /** @return array<string, mixed>|null */
+    public function current(AuthenticatedUser $actor): ?array
+    {
+        $ownedRoomId = $this->roomRepository->findOwnedRoomId($actor->id);
+        if ($ownedRoomId !== null) {
+            return $this->snapshot($ownedRoomId, $actor->id);
+        }
+
+        $roomId = $this->participantRepository->findLatestRoomIdForUser($actor->id);
+        if ($roomId === null) {
+            return null;
+        }
+
+        return $this->snapshot($roomId, $actor->id);
+    }
+
     /** @return array<string, mixed> */
-    public function updateSettings(string $roomId, AuthenticatedUser $actor, bool $isPublic, string $password): array
+    public function updateSettings(string $roomId, AuthenticatedUser $actor, bool $isPublic, int $maxPlayers, string $password): array
     {
         $room = $this->requireRoom($roomId);
         $this->ensureOwner($room, $actor);
 
         $trimmed = trim($password);
         $passwordHash = $trimmed === '' ? null : password_hash($trimmed, PASSWORD_DEFAULT);
-        $this->roomRepository->updateSettings($roomId, $isPublic, $passwordHash);
+        $this->roomRepository->updateSettings($roomId, $isPublic, $maxPlayers, $passwordHash);
 
         return $this->snapshot($roomId, $actor->id);
     }
@@ -162,7 +184,7 @@ final class RoomService
             throw new ApiException(ApiErrorCode::OWNER_CANNOT_BE_REMOVED);
         }
         $role = $this->participantRepository->roleForUser($roomId, $targetUserId);
-        if ($role !== 'player') {
+        if ($role === null) {
             throw new ApiException(ApiErrorCode::ONLY_PLAYERS_CAN_BE_KICKED);
         }
 
@@ -179,11 +201,36 @@ final class RoomService
         if ($targetUserId === $room->ownerUserId) {
             throw new ApiException(ApiErrorCode::OWNER_CANNOT_BE_REMOVED);
         }
+        $role = $this->participantRepository->roleForUser($roomId, $targetUserId);
+        if ($role === 'spectator') {
+            throw new ApiException(ApiErrorCode::SPECTATORS_CAN_ONLY_BE_KICKED);
+        }
 
         $this->participantRepository->remove($roomId, $targetUserId);
         $this->roomBanRepository->ban($roomId, $targetUserId, $actor->id);
 
         return $this->snapshot($roomId, $actor->id);
+    }
+
+    /** @return array<string, mixed> */
+    public function transferOwnership(string $roomId, AuthenticatedUser $actor, string $targetUserId): array
+    {
+        $room = $this->requireRoom($roomId);
+        $this->ensureOwner($room, $actor);
+        if ($targetUserId === $actor->id) {
+            throw new ApiException(ApiErrorCode::CANNOT_TRANSFER_OWNERSHIP_TO_SELF);
+        }
+        $role = $this->participantRepository->roleForUser($roomId, $targetUserId);
+        if ($role === null) {
+            throw new ApiException(ApiErrorCode::USER_NOT_IN_ROOM);
+        }
+        if ($role === 'spectator') {
+            throw new ApiException(ApiErrorCode::SPECTATORS_CAN_ONLY_BE_KICKED);
+        }
+
+        $this->roomRepository->transferOwnership($roomId, $actor->id, $targetUserId);
+
+        return $this->snapshot($roomId, $targetUserId);
     }
 
     private function ensureParticipantExists(string $roomId, string $userId): void

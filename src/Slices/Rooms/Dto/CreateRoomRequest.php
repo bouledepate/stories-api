@@ -19,6 +19,8 @@ final class CreateRoomRequest
 
         public readonly bool $isPublic = true,
 
+        public readonly int $maxPlayers = 6,
+
         #[StringValue]
         #[Length(min: 0, max: 128)]
         public readonly string $password = ''
@@ -31,6 +33,7 @@ final class CreateRoomRequest
         return new self(
             trim((string) ($data['name'] ?? '')),
             BooleanNormalizer::fromMixed($data['isPublic'] ?? null, true),
+            max(2, min(6, (int) ($data['maxPlayers'] ?? 6))),
             trim((string) ($data['password'] ?? ''))
         );
     }

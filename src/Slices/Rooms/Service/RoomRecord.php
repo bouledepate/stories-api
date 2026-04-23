@@ -16,6 +16,7 @@ final class RoomRecord
         public readonly string $ownerUsername,
         public readonly string $status,
         public readonly bool $isPublic,
+        public readonly int $maxPlayers,
         public readonly ?string $passwordHash,
         public readonly ?string $inviteCodeRegeneratedAt
     ) {
@@ -32,6 +33,7 @@ final class RoomRecord
             (string) ($row['owner_username'] ?? ''),
             (string) $row['status'],
             BooleanNormalizer::fromMixed($row['is_public'] ?? null, true),
+            (int) ($row['max_players'] ?? 6),
             isset($row['password_hash']) && $row['password_hash'] !== '' ? (string) $row['password_hash'] : null,
             isset($row['invite_code_regenerated_at']) && $row['invite_code_regenerated_at'] !== '' ? (string) $row['invite_code_regenerated_at'] : null
         );

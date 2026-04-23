@@ -7,15 +7,13 @@ use Psr\Http\Message\ServerRequestInterface;
 use Slim\App;
 use Slim\Handlers\Strategies\RequestResponse;
 use Stories\Shared\Web\UiIndexAction;
-use Stories\Slices\Admin\Action\ListCardsAction;
-use Stories\Slices\Admin\Action\ListEffectsAction;
-use Stories\Slices\Admin\Action\PatchCardAction;
 use Stories\Slices\Auth\Action\LoginAction;
 use Stories\Slices\Auth\Action\MeAction;
 use Stories\Slices\Auth\Action\RegisterAction;
 use Stories\Slices\Auth\Action\ChangePasswordAction;
 use Stories\Slices\Auth\Action\UpdateMeAction;
 use Stories\Slices\Rooms\Action\CreateRoomAction;
+use Stories\Slices\Rooms\Action\GetCurrentRoomAction;
 use Stories\Slices\Rooms\Action\GetRoomStateAction;
 use Stories\Slices\Rooms\Action\JoinByInviteCodeAction;
 use Stories\Slices\Rooms\Action\JoinRoomAction;
@@ -25,7 +23,7 @@ use Stories\Slices\Rooms\Action\ListLobbiesAction;
 use Stories\Slices\Rooms\Action\BanParticipantAction;
 use Stories\Slices\Rooms\Action\RegenerateInviteCodeAction;
 use Stories\Slices\Rooms\Action\ReadyAction;
-use Stories\Slices\Rooms\Action\StartGameAction;
+use Stories\Slices\Rooms\Action\TransferOwnershipAction;
 use Stories\Slices\Rooms\Action\UpdateRoomSettingsAction;
 
 return static function (App $app): void {
@@ -51,14 +49,11 @@ return static function (App $app): void {
     $app->post('/rooms/join-by-code', JoinByInviteCodeAction::class);
     $app->post('/rooms/{roomId}/leave', LeaveRoomAction::class);
     $app->post('/rooms/{roomId}/ready', ReadyAction::class);
-    $app->post('/rooms/{roomId}/start', StartGameAction::class);
+    $app->get('/rooms/current', GetCurrentRoomAction::class);
     $app->get('/rooms/{roomId}', GetRoomStateAction::class);
     $app->patch('/rooms/{roomId}/settings', UpdateRoomSettingsAction::class);
     $app->post('/rooms/{roomId}/invite-code/regenerate', RegenerateInviteCodeAction::class);
+    $app->post('/rooms/{roomId}/participants/{userId}/transfer-ownership', TransferOwnershipAction::class);
     $app->post('/rooms/{roomId}/participants/{userId}/kick', KickParticipantAction::class);
     $app->post('/rooms/{roomId}/participants/{userId}/ban', BanParticipantAction::class);
-
-    $app->get('/admin/cards', ListCardsAction::class);
-    $app->patch('/admin/cards/{deck}/{cardCode}', PatchCardAction::class);
-    $app->get('/admin/effects', ListEffectsAction::class);
 };

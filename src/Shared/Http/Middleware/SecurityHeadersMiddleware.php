@@ -22,6 +22,6 @@ final class SecurityHeadersMiddleware implements MiddlewareInterface
             ->withHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
             ->withHeader('Cross-Origin-Opener-Policy', 'same-origin')
             ->withHeader('Cross-Origin-Resource-Policy', 'same-origin')
-            ->withHeader('Content-Security-Policy', "default-src 'self'; frame-ancestors 'none'; base-uri 'self'");
+            ->withHeader('Content-Security-Policy', "default-src 'self'; connect-src 'self' ws://localhost:8081; frame-ancestors 'none'; base-uri 'self'");
     }
 }

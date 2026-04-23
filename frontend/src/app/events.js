@@ -1,6 +1,6 @@
 import { callApi } from './api';
 import { t } from './i18n';
-import { parseSafeUrl, safeTextValue } from './security';
+import { safeTextValue } from './security';
 import { state } from './state';
 
 const LOBBIES_TOPIC = '__lobbies__';
@@ -12,14 +12,6 @@ export const setStatus = (id, message, ok = false) => {
   el.classList.toggle('ok', ok);
 };
 
-export const logDebug = (payload) => {
-  const container = document.querySelector('#debugLog');
-  if (!container) return;
-  const line = document.createElement('div');
-  line.textContent = `[${new Date().toLocaleTimeString()}] ${typeof payload === 'string' ? payload : JSON.stringify(payload)}`;
-  container.prepend(line);
-};
-
 const showToast = (message, type = 'error') => {
   const container = document.querySelector('#toastContainer');
   if (!container || !message) return;
@@ -28,6 +20,15 @@ const showToast = (message, type = 'error') => {
   toast.textContent = message;
   container.prepend(toast);
   window.setTimeout(() => toast.remove(), 4200);
+};
+
+const persistActiveRoom = (room) => {
+  const roomId = room?.roomId || '';
+  if (roomId) {
+    localStorage.setItem('stories_active_room_id', roomId);
+  } else {
+    localStorage.removeItem('stories_active_room_id');
+  }
 };
 
 const showApiError = (statusId, error) => {
@@ -68,9 +69,112 @@ const emitLobbiesChanged = (event, data = {}) => {
   });
 };
 
+const pushRoomChatMessage = (message) => {
+  state.roomChatMessages = [
+    ...state.roomChatMessages,
+    {
+      timestamp: Date.now(),
+      ...message,
+    },
+  ].slice(-100);
+};
+
+const syncChatScroll = () => {
+  const container = document.querySelector('#roomChatLog');
+  if (!container) return;
+  window.requestAnimationFrame(() => {
+    container.scrollTop = container.scrollHeight;
+  });
+};
+
+const systemPresenceText = (payload) => {
+  const username = payload?.username || t('systemUnknownUser');
+  if (payload?.event === 'room_settings_updated') {
+    return t('roomUpdatedSystem');
+  }
+  if (payload?.event === 'room_ownership_transferred') {
+    return t('ownershipTransferredSystem', { username });
+  }
+  if (payload?.event === 'room_participant_kicked') {
+    return t('participantKickedSystem', { username });
+  }
+  if (payload?.event === 'room_participant_banned') {
+    return t('participantBannedSystem', { username });
+  }
+  if (payload?.event === 'joined') {
+    return t('systemJoinedRoom', { username });
+  }
+  if (payload?.event === 'left') {
+    return t('systemLeftRoom', { username });
+  }
+
+  return payload?.message || '';
+};
+
+const pushSystemRoomEvent = (event, payload = {}) => {
+  pushRoomChatMessage({
+    username: t('roleSystem'),
+    role: 'system',
+    text: systemPresenceText({ event, ...payload }),
+    timestamp: payload?.timestamp || Date.now(),
+  });
+};
+
 const subscribeRoomSocket = (roomId) => {
   if (!roomId) return;
   sendSocketMessage({ type: 'subscribe_room', roomId });
+};
+
+const resetRoomUiState = () => {
+  state.roomChatMessages = [];
+  state.roomNoticeMessage = '';
+  state.roomStatusMessage = '';
+  state.roomSettingsOpen = false;
+};
+
+const clearActiveRoomState = () => {
+  state.activeRoom = null;
+  persistActiveRoom(null);
+  state.roomStatusMessage = '';
+  state.roomSettingsOpen = false;
+};
+
+const activateRoomState = (room, { resetChat = true } = {}) => {
+  state.activeRoom = room;
+  persistActiveRoom(room);
+  subscribeRoomSocket(room.roomId);
+  if (resetChat) {
+    state.roomChatMessages = [];
+  }
+  state.roomNoticeMessage = '';
+  state.roomStatusMessage = '';
+  state.activeTab = 'roomManage';
+};
+
+const isSameActiveRoom = (roomId) => Boolean(roomId && state.activeRoom?.roomId === roomId);
+
+const returnToCurrentRoom = (render) => {
+  state.roomModalOpen = false;
+  state.joinLobbyModalOpen = false;
+  state.roomSwitchPromptOpen = false;
+  state.activeTab = 'roomManage';
+  render();
+};
+
+const closeRoomSwitchPrompt = (render, shouldRender = true) => {
+  state.roomSwitchPromptOpen = false;
+  state.roomSwitchPromptMode = 'leave';
+  state.roomSwitchTargetLabel = '';
+  state.pendingJoinAction = null;
+  if (shouldRender) render();
+};
+
+const openRoomSwitchPrompt = (render, pendingJoinAction) => {
+  state.pendingJoinAction = pendingJoinAction;
+  state.roomSwitchPromptMode = state.activeRoom?.ownerId === state.user?.id ? 'close' : 'leave';
+  state.roomSwitchTargetLabel = pendingJoinAction.targetLabel || '';
+  state.roomSwitchPromptOpen = true;
+  render();
 };
 
 export const ensureLobbyRealtime = (refreshLobbies, render) => {
@@ -98,6 +202,7 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
 
       const changedRoomId = payload?.data?.roomId;
       const changedUserId = payload?.data?.userId;
+      const changedUsername = payload?.data?.username || payload?.username || t('systemUnknownUser');
       if (
         changedRoomId
         && state.activeRoom?.roomId === changedRoomId
@@ -105,7 +210,7 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
         && state.user?.id === changedUserId
         && (payload?.event === 'room_participant_kicked' || payload?.event === 'room_participant_banned')
       ) {
-        state.activeRoom = null;
+        clearActiveRoomState();
         state.activeTab = 'home';
         const message = payload?.event === 'room_participant_banned' ? t('blockedNotice') : t('kickedFromRoomNotice');
         state.roomNoticeMessage = message;
@@ -116,10 +221,25 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
       }
 
       if (changedRoomId && state.activeRoom?.roomId === changedRoomId) {
+        if (
+          payload?.event === 'room_settings_updated'
+          || payload?.event === 'room_ownership_transferred'
+          || payload?.event === 'room_participant_kicked'
+          || payload?.event === 'room_participant_banned'
+        ) {
+          const isOwnEvent = payload?.data?.actorUserId && payload.data.actorUserId === state.user?.id;
+          if (!isOwnEvent) {
+            pushSystemRoomEvent(payload.event, {
+              username: changedUsername,
+              timestamp: payload?.timestamp,
+            });
+          }
+        }
         try {
           state.activeRoom = await callApi(`/rooms/${encodeURIComponent(changedRoomId)}`);
+          persistActiveRoom(state.activeRoom);
         } catch {
-          state.activeRoom = null;
+          clearActiveRoomState();
           state.activeTab = 'home';
           state.roomNoticeMessage = t('roomClosedNotice');
           showToast(t('roomClosedNotice'));
@@ -134,7 +254,7 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
 
     if (payload?.type === 'room_event' && payload?.roomId && state.activeRoom?.roomId === payload.roomId) {
       if (payload?.event === 'access_denied') {
-        state.activeRoom = null;
+        clearActiveRoomState();
         state.activeTab = 'home';
         const message = payload?.data?.reason === 'banned' ? t('blockedNotice') : t('kickedFromRoomNotice');
         state.roomNoticeMessage = message;
@@ -145,22 +265,25 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
       }
 
       if (payload?.event === 'chat_message' && payload?.data?.text) {
-        state.roomChatMessages = [
-          ...state.roomChatMessages,
-          {
-            username: payload?.data?.username || 'user',
-            role: payload?.data?.role || 'player',
-            text: payload?.data?.text || '',
-          },
-        ].slice(-100);
-        if (state.activeTab === 'roomManage') render();
+        pushRoomChatMessage({
+          username: payload?.data?.username || payload?.username || 'user',
+          role: payload?.data?.role || 'player',
+          userId: payload?.userId || null,
+          text: payload?.data?.text || '',
+          timestamp: payload?.timestamp,
+        });
+        if (state.activeTab === 'roomManage') {
+          render();
+          syncChatScroll();
+        }
         return;
       }
       try {
         state.activeRoom = await callApi(`/rooms/${encodeURIComponent(payload.roomId)}`);
+        persistActiveRoom(state.activeRoom);
         render();
       } catch {
-        state.activeRoom = null;
+        clearActiveRoomState();
         state.activeTab = 'home';
         state.roomNoticeMessage = t('roomClosedNotice');
         showToast(t('roomClosedNotice'));
@@ -170,11 +293,20 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
     }
 
     if (payload?.type === 'presence' && payload?.roomId && state.activeRoom?.roomId === payload.roomId) {
-      state.roomChatMessages = [
-        ...state.roomChatMessages,
-        { username: t('roleSystem'), role: 'system', text: payload?.message || '' },
-      ].slice(-100);
-      if (state.activeTab === 'roomManage') render();
+      if (payload?.event === 'joined' && state.suppressOwnJoinPresence && payload?.username === state.user?.username) {
+        state.suppressOwnJoinPresence = false;
+        return;
+      }
+      pushRoomChatMessage({
+        username: t('roleSystem'),
+        role: 'system',
+        text: systemPresenceText(payload),
+        timestamp: payload?.timestamp,
+      });
+      if (state.activeTab === 'roomManage') {
+        render();
+        syncChatScroll();
+      }
     }
   };
 
@@ -206,35 +338,99 @@ const closeJoinLobbyModal = (render) => {
   state.joinLobbyModalOpen = false;
   state.joinLobbyRoomId = '';
   state.joinLobbyOwnerUserId = '';
+  state.joinLobbyRoomName = '';
   state.joinLobbyNeedsPassword = false;
   state.joinLobbyPassword = '';
   render();
 };
 
-const joinLobbyRequest = async (render, roomId, ownerUserId, password = '') => {
+const leaveCurrentRoom = async () => {
+  if (!state.activeRoom?.roomId) return;
+
+  const roomId = state.activeRoom.roomId;
+  await callApi(`/rooms/${encodeURIComponent(roomId)}/leave`, {
+    method: 'POST',
+  });
+  clearActiveRoomState();
+  emitLobbiesChanged('room_left', { roomId, topic: LOBBIES_TOPIC });
+};
+
+const executeJoinLobbyRequest = async (render, roomId, ownerUserId, password = '', statusId = 'homeStatus') => {
   try {
+    if (isSameActiveRoom(roomId)) {
+      returnToCurrentRoom(render);
+      return true;
+    }
+
     if (state.user?.id && ownerUserId === state.user.id) {
-      state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}`);
+      const room = await callApi(`/rooms/${encodeURIComponent(roomId)}`);
+      activateRoomState(room, { resetChat: false });
     } else {
       const payload = { spectator: false };
       if (password.trim() !== '') payload.password = password.trim();
-      state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}/join`, {
+      const room = await callApi(`/rooms/${encodeURIComponent(roomId)}/join`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
+      activateRoomState(room);
     }
-    subscribeRoomSocket(state.activeRoom.roomId);
     emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
-    state.activeTab = 'roomManage';
-    setStatus('homeStatus', `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
-    state.roomChatMessages = [];
-    state.roomNoticeMessage = '';
+    setStatus(statusId, `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
     showToast(t('roomJoinSuccess'), 'ok');
     render();
     return true;
   } catch (e) {
-    showApiError('homeStatus', e);
+    showApiError(statusId, e);
     return false;
+  }
+};
+
+const executeJoinByCodeRequest = async (render, inviteCode, password, spectator = false, statusId = 'homeStatus') => {
+  try {
+    const payload = { inviteCode, spectator };
+    if (password !== '') payload.password = password;
+
+    const room = await callApi('/rooms/join-by-code', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    activateRoomState(room);
+    emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
+    state.roomModalOpen = false;
+    state.homeStatusMessage = `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`;
+    render();
+    return true;
+  } catch (e) {
+    state.homeStatusMessage = e.message;
+    showApiError(statusId, e);
+    return false;
+  }
+};
+
+const runPendingJoinAction = async (render) => {
+  const pending = state.pendingJoinAction;
+  if (!pending) return;
+
+  closeRoomSwitchPrompt(render, false);
+  if (pending.kind === 'lobby') {
+    const ok = await executeJoinLobbyRequest(render, pending.roomId, pending.ownerUserId, pending.password || '', 'joinLobbyStatus');
+    if (ok) {
+      state.joinLobbyModalOpen = false;
+      state.joinLobbyRoomId = '';
+      state.joinLobbyOwnerUserId = '';
+      state.joinLobbyRoomName = '';
+      state.joinLobbyNeedsPassword = false;
+    }
+    return;
+  }
+
+  if (pending.kind === 'invite') {
+    await executeJoinByCodeRequest(render, pending.inviteCode, pending.password || '', Boolean(pending.spectator), 'homeStatus');
+    return;
+  }
+
+  if (pending.kind === 'open_create_modal') {
+    openRoomModal(render, 'create');
   }
 };
 
@@ -253,19 +449,25 @@ const bindRoomModalEvents = (render) => {
       const payload = {
         name,
         isPublic: Boolean(document.querySelector('#roomIsPublic')?.checked),
+        maxPlayers: Number(safeTextValue('#roomMaxPlayers', 1) || '6'),
       };
       if (password !== '') payload.password = password;
 
-      state.activeRoom = await callApi('/rooms', {
+      if (state.activeRoom?.roomId) {
+        openRoomSwitchPrompt(render, {
+          kind: 'open_create_modal',
+          targetLabel: t('createRoom'),
+        });
+        return;
+      }
+
+      const room = await callApi('/rooms', {
         method: 'POST',
         body: JSON.stringify(payload),
       });
-      subscribeRoomSocket(state.activeRoom.roomId);
-      state.roomChatMessages = [];
-      state.roomNoticeMessage = '';
+      activateRoomState(room);
       emitLobbiesChanged('room_created', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
       state.roomModalOpen = false;
-      state.activeTab = 'roomManage';
       state.homeStatusMessage = `${t('roomCreated')} ${state.activeRoom.inviteCode}`;
       render();
     } catch (e) {
@@ -285,24 +487,23 @@ const bindRoomModalEvents = (render) => {
         return;
       }
       const password = safeTextValue('#joinPassword', 128);
-      const payload = {
-        inviteCode,
-        spectator: Boolean(document.querySelector('#joinAsSpectator')?.checked),
-      };
-      if (password !== '') payload.password = password;
+      const spectator = Boolean(document.querySelector('#joinAsSpectator')?.checked);
+      if (state.activeRoom?.inviteCode === inviteCode) {
+        returnToCurrentRoom(render);
+        return;
+      }
+      if (state.activeRoom?.roomId) {
+        openRoomSwitchPrompt(render, {
+          kind: 'invite',
+          inviteCode,
+          password,
+          spectator,
+          targetLabel: inviteCode,
+        });
+        return;
+      }
 
-      state.activeRoom = await callApi('/rooms/join-by-code', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      subscribeRoomSocket(state.activeRoom.roomId);
-      state.roomChatMessages = [];
-      state.roomNoticeMessage = '';
-      emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
-      state.roomModalOpen = false;
-      state.activeTab = 'roomManage';
-      state.homeStatusMessage = `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`;
-      render();
+      await executeJoinByCodeRequest(render, inviteCode, password, spectator, 'homeStatus');
     } catch (e) {
       state.homeStatusMessage = e.message;
       showApiError('homeStatus', e);
@@ -331,6 +532,13 @@ export const bindCommonEvents = (render) => {
   document.querySelectorAll('[data-act="heroCreate"]').forEach((node) => {
     node.addEventListener('click', () => {
       if (!state.user) return openAuth(render, 'login');
+      if (state.activeRoom?.roomId) {
+        openRoomSwitchPrompt(render, {
+          kind: 'open_create_modal',
+          targetLabel: t('createRoom'),
+        });
+        return;
+      }
       openRoomModal(render, 'create');
     });
   });
@@ -357,9 +565,11 @@ export const bindCommonEvents = (render) => {
   document.querySelector('[data-act="logout"]')?.addEventListener('click', () => {
     state.token = '';
     state.user = null;
-    state.activeRoom = null;
+    clearActiveRoomState();
     state.authOpen = false;
     state.roomNoticeMessage = '';
+    state.roomSwitchPromptOpen = false;
+    state.pendingJoinAction = null;
     if (state.socket?.readyState === WebSocket.OPEN) {
       state.socket.close();
     }
@@ -370,8 +580,17 @@ export const bindCommonEvents = (render) => {
   document.querySelectorAll('[data-act="closeRoomModal"]').forEach((node) => {
     node.addEventListener('click', () => closeRoomModal(render));
   });
+  document.querySelectorAll('[data-act="closeRoomSettings"]').forEach((node) => {
+    node.addEventListener('click', () => {
+      state.roomSettingsOpen = false;
+      render();
+    });
+  });
   document.querySelectorAll('[data-act="closeJoinLobbyModal"]').forEach((node) => {
     node.addEventListener('click', () => closeJoinLobbyModal(render));
+  });
+  document.querySelectorAll('[data-act="closeRoomSwitchModal"], [data-act="cancelRoomSwitch"]').forEach((node) => {
+    node.addEventListener('click', () => closeRoomSwitchPrompt(render));
   });
   document.querySelector('[data-act="confirmJoinLobby"]')?.addEventListener('click', async () => {
     if (!state.joinLobbyRoomId) return;
@@ -382,8 +601,26 @@ export const bindCommonEvents = (render) => {
       setStatus('joinLobbyStatus', t('requiredField'));
       return;
     }
-    const ok = await joinLobbyRequest(render, state.joinLobbyRoomId, state.joinLobbyOwnerUserId, password);
+    if (state.activeRoom?.roomId && !isSameActiveRoom(state.joinLobbyRoomId)) {
+      openRoomSwitchPrompt(render, {
+        kind: 'lobby',
+        roomId: state.joinLobbyRoomId,
+        ownerUserId: state.joinLobbyOwnerUserId,
+        password,
+        targetLabel: state.joinLobbyRoomName || state.joinLobbyRoomId,
+      });
+      return;
+    }
+    const ok = await executeJoinLobbyRequest(render, state.joinLobbyRoomId, state.joinLobbyOwnerUserId, password, 'joinLobbyStatus');
     if (ok) closeJoinLobbyModal(render);
+  });
+  document.querySelector('[data-act="confirmRoomSwitch"]')?.addEventListener('click', async () => {
+    try {
+      await leaveCurrentRoom();
+      await runPendingJoinAction(render);
+    } catch (e) {
+      showApiError('roomSwitchStatus', e);
+    }
   });
 
   if (state.roomModalOpen && state.user) {
@@ -413,6 +650,19 @@ export const bindAuthEvents = async (render, loadMe) => {
       state.token = data.accessToken;
       localStorage.setItem('stories_token', state.token);
       await loadMe();
+      try {
+        const currentRoom = await callApi('/rooms/current');
+        if (currentRoom?.roomId) {
+          state.activeRoom = currentRoom;
+          persistActiveRoom(currentRoom);
+          state.activeTab = 'roomManage';
+          state.suppressOwnJoinPresence = true;
+        } else {
+          clearActiveRoomState();
+        }
+      } catch {
+        clearActiveRoomState();
+      }
       setStatus('authStatus', successMessage, true);
       state.authOpen = false;
       render();
@@ -429,6 +679,8 @@ export const bindHomeEvents = (render) => {
 
     try {
       state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}`);
+      persistActiveRoom(state.activeRoom);
+      state.suppressOwnJoinPresence = true;
       render();
     } catch (e) {
       showApiError('homeStatus', e);
@@ -439,22 +691,11 @@ export const bindHomeEvents = (render) => {
 
   const requireRoom = () => {
     if (!state.activeRoom?.roomId) {
-      setStatus('homeStatus', t('roomNotFound'));
+      setStatus('roomStatus', t('roomNotFound'));
       return false;
     }
     return true;
   };
-
-  document.querySelector('[data-act="refreshRoom"]')?.addEventListener('click', async () => {
-    if (!requireRoom()) return;
-    try {
-      state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}`);
-      setStatus('homeStatus', t('ready'), true);
-      render();
-    } catch (e) {
-      showApiError('homeStatus', e);
-    }
-  });
 
   document.querySelector('[data-act="readyRoom"]')?.addEventListener('click', async () => {
     if (!requireRoom()) return;
@@ -465,35 +706,24 @@ export const bindHomeEvents = (render) => {
         method: 'POST',
         body: JSON.stringify({ ready: nextReady }),
       });
+      persistActiveRoom(state.activeRoom);
       emitLobbiesChanged('room_ready_changed', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
-      setStatus('homeStatus', nextReady ? t('statusReady') : t('statusNotReady'), true);
       render();
     } catch (e) {
-      showApiError('homeStatus', e);
+      showApiError('roomStatus', e);
     }
-  });
-
-  document.querySelector('[data-act="startGame"]')?.addEventListener('click', async () => {
-    if (!requireRoom()) return;
-    setStatus('homeStatus', t('gameNotImplementedYet'));
-    showToast(t('gameNotImplementedYet'));
   });
 
   document.querySelector('[data-act="leaveRoom"]')?.addEventListener('click', async () => {
     if (!requireRoom()) return;
     try {
-      const roomId = state.activeRoom.roomId;
-      await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/leave`, {
-        method: 'POST',
-      });
-      state.activeRoom = null;
+      await leaveCurrentRoom();
       state.activeTab = 'home';
       state.roomNoticeMessage = '';
-      emitLobbiesChanged('room_left', { roomId, topic: LOBBIES_TOPIC });
       setStatus('homeStatus', t('ready'), true);
       render();
     } catch (e) {
-      showApiError('homeStatus', e);
+      showApiError('roomStatus', e);
     }
   });
 
@@ -502,18 +732,24 @@ export const bindHomeEvents = (render) => {
       if (!state.user) return openAuth(render, 'login');
       const roomId = btn.dataset.roomId;
       if (!roomId) return;
-      const ownerUserId = btn.dataset.roomOwnerId || '';
-      const needsPassword = btn.dataset.roomHasPassword === '1';
-      if (state.user?.id && ownerUserId === state.user.id) {
-        await joinLobbyRequest(render, roomId, ownerUserId);
+      if (isSameActiveRoom(roomId)) {
+        returnToCurrentRoom(render);
         return;
       }
+      const ownerUserId = btn.dataset.roomOwnerId || '';
+      const needsPassword = btn.dataset.roomHasPassword === '1';
       state.joinLobbyModalOpen = true;
       state.joinLobbyRoomId = roomId;
+      state.joinLobbyRoomName = btn.dataset.roomName || roomId;
       state.joinLobbyOwnerUserId = ownerUserId;
       state.joinLobbyNeedsPassword = needsPassword;
       render();
     });
+  });
+
+  document.querySelector('[data-act="openRoomSettings"]')?.addEventListener('click', () => {
+    state.roomSettingsOpen = true;
+    render();
   });
 };
 
@@ -522,14 +758,22 @@ const bindRoomManageEvents = (render) => {
     if (!state.activeRoom?.roomId) return;
     try {
       const isPublic = Boolean(document.querySelector('#manageIsPublic')?.checked);
+      const maxPlayers = Number(safeTextValue('#manageMaxPlayers', 1) || '6');
       const password = safeTextValue('#managePassword', 128);
       state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/settings`, {
         method: 'PATCH',
-        body: JSON.stringify({ isPublic, password }),
+        body: JSON.stringify({ isPublic, maxPlayers, password }),
       });
-      emitLobbiesChanged('room_settings_updated', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
+      persistActiveRoom(state.activeRoom);
+      emitLobbiesChanged('room_settings_updated', {
+        roomId: state.activeRoom.roomId,
+        topic: LOBBIES_TOPIC,
+        actorUserId: state.user?.id,
+      });
+      pushSystemRoomEvent('room_settings_updated');
       setStatus('roomManageStatus', t('roomSettingsSaved'), true);
       showToast(t('roomSettingsSaved'), 'ok');
+      state.roomSettingsOpen = false;
       render();
     } catch (e) {
       showApiError('roomManageStatus', e);
@@ -542,12 +786,14 @@ const bindRoomManageEvents = (render) => {
       state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/invite-code/regenerate`, {
         method: 'POST',
       });
+      persistActiveRoom(state.activeRoom);
       emitLobbiesChanged('room_invite_regenerated', { roomId: state.activeRoom.roomId, topic: LOBBIES_TOPIC });
-      setStatus('roomManageStatus', t('inviteRegenerated'), true);
+      setStatus('roomManageStatus', '');
       showToast(t('inviteRegenerated'), 'ok');
       render();
     } catch (e) {
-      showApiError('roomManageStatus', e);
+      setStatus('roomManageStatus', '');
+      showToast(e?.message || t('unknownError'));
     }
   });
 
@@ -556,9 +802,18 @@ const bindRoomManageEvents = (render) => {
       if (!state.activeRoom?.roomId) return;
       const userId = btn.dataset.userId;
       if (!userId) return;
+      const participant = (state.activeRoom.participants || []).find((item) => item.userId === userId);
       try {
         state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/participants/${encodeURIComponent(userId)}/kick`, { method: 'POST' });
-        emitLobbiesChanged('room_participant_kicked', { roomId: state.activeRoom.roomId, userId, topic: LOBBIES_TOPIC });
+        persistActiveRoom(state.activeRoom);
+        emitLobbiesChanged('room_participant_kicked', {
+          roomId: state.activeRoom.roomId,
+          userId,
+          username: participant?.username || '',
+          actorUserId: state.user?.id,
+          topic: LOBBIES_TOPIC,
+        });
+        pushSystemRoomEvent('room_participant_kicked', { username: participant?.username || t('systemUnknownUser') });
         render();
       } catch (e) {
         showApiError('roomManageStatus', e);
@@ -571,9 +826,44 @@ const bindRoomManageEvents = (render) => {
       if (!state.activeRoom?.roomId) return;
       const userId = btn.dataset.userId;
       if (!userId) return;
+      const participant = (state.activeRoom.participants || []).find((item) => item.userId === userId);
       try {
         state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/participants/${encodeURIComponent(userId)}/ban`, { method: 'POST' });
-        emitLobbiesChanged('room_participant_banned', { roomId: state.activeRoom.roomId, userId, topic: LOBBIES_TOPIC });
+        persistActiveRoom(state.activeRoom);
+        emitLobbiesChanged('room_participant_banned', {
+          roomId: state.activeRoom.roomId,
+          userId,
+          username: participant?.username || '',
+          actorUserId: state.user?.id,
+          topic: LOBBIES_TOPIC,
+        });
+        pushSystemRoomEvent('room_participant_banned', { username: participant?.username || t('systemUnknownUser') });
+        render();
+      } catch (e) {
+        showApiError('roomManageStatus', e);
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-act="transferOwnership"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!state.activeRoom?.roomId) return;
+      const userId = btn.dataset.userId;
+      if (!userId) return;
+      const participant = (state.activeRoom.participants || []).find((item) => item.userId === userId);
+      try {
+        state.activeRoom = await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}/participants/${encodeURIComponent(userId)}/transfer-ownership`, { method: 'POST' });
+        persistActiveRoom(state.activeRoom);
+        emitLobbiesChanged('room_ownership_transferred', {
+          roomId: state.activeRoom.roomId,
+          userId,
+          username: participant?.username || '',
+          actorUserId: state.user?.id,
+          topic: LOBBIES_TOPIC,
+        });
+        pushSystemRoomEvent('room_ownership_transferred', { username: participant?.username || t('systemUnknownUser') });
+        setStatus('roomManageStatus', t('ownershipTransferred'), true);
+        showToast(t('ownershipTransferred'), 'ok');
         render();
       } catch (e) {
         showApiError('roomManageStatus', e);
@@ -584,6 +874,7 @@ const bindRoomManageEvents = (render) => {
   document.querySelector('[data-act="sendRoomChat"]')?.addEventListener('click', () => {
     const text = safeTextValue('#roomChatInput', 512);
     if (!state.activeRoom?.roomId || text === '') return;
+    state.roomChatInputShouldFocus = true;
     sendSocketMessage({
       type: 'room_event',
       roomId: state.activeRoom.roomId,
@@ -595,7 +886,16 @@ const bindRoomManageEvents = (render) => {
       },
     });
     const input = document.querySelector('#roomChatInput');
-    if (input) input.value = '';
+    if (input) {
+      input.value = '';
+      input.focus();
+    }
+  });
+
+  document.querySelector('#roomChatInput')?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || event.shiftKey) return;
+    event.preventDefault();
+    document.querySelector('[data-act="sendRoomChat"]')?.click();
   });
 };
 
@@ -603,7 +903,7 @@ export const bindLobbyEvents = (render) => {
   const loadLobbies = async () => {
     try {
       state.lobbyCatalog = (await callApi(
-        `/lobbies?visibility=${encodeURIComponent(state.lobbyFilters.visibility)}&password=${encodeURIComponent(state.lobbyFilters.password)}&limit=${state.lobbyFilters.limit}`
+        `/lobbies?visibility=public&password=${encodeURIComponent(state.lobbyFilters.password)}&limit=${state.lobbyFilters.limit}`
       )).items || [];
       setStatus('lobbyStatus', t('ready'), true);
       render();
@@ -613,7 +913,6 @@ export const bindLobbyEvents = (render) => {
   };
 
   document.querySelector('[data-act="loadLobbies"]')?.addEventListener('click', async () => {
-    state.lobbyFilters.visibility = safeTextValue('#lobbyVisibility', 16) || 'all';
     state.lobbyFilters.password = safeTextValue('#lobbyPasswordFilter', 20) || 'all';
     state.lobbyFilters.limit = Number(safeTextValue('#lobbyLimit', 3) || '20');
     await loadLobbies();
@@ -624,14 +923,15 @@ export const bindLobbyEvents = (render) => {
       if (!state.user) return openAuth(render, 'login');
       const roomId = btn.dataset.roomId;
       if (!roomId) return;
-      const ownerUserId = btn.dataset.roomOwnerId || '';
-      const needsPassword = btn.dataset.roomHasPassword === '1';
-      if (state.user?.id && ownerUserId === state.user.id) {
-        await joinLobbyRequest(render, roomId, ownerUserId);
+      if (isSameActiveRoom(roomId)) {
+        returnToCurrentRoom(render);
         return;
       }
+      const ownerUserId = btn.dataset.roomOwnerId || '';
+      const needsPassword = btn.dataset.roomHasPassword === '1';
       state.joinLobbyModalOpen = true;
       state.joinLobbyRoomId = roomId;
+      state.joinLobbyRoomName = btn.dataset.roomName || roomId;
       state.joinLobbyOwnerUserId = ownerUserId;
       state.joinLobbyNeedsPassword = needsPassword;
       render();
@@ -645,9 +945,12 @@ export const bindProfileEvents = (render) => {
       try {
         const roomId = btn.dataset.roomId;
         if (!roomId) return;
-        state.activeRoom = await callApi(`/rooms/${encodeURIComponent(roomId)}`);
-        state.activeTab = 'roomManage';
-        state.roomNoticeMessage = '';
+        if (isSameActiveRoom(roomId)) {
+          returnToCurrentRoom(render);
+          return;
+        }
+        const room = await callApi(`/rooms/${encodeURIComponent(roomId)}`);
+        activateRoomState(room, { resetChat: false });
         render();
       } catch (e) {
         showApiError('profileStatus', e);
@@ -693,133 +996,4 @@ export const bindProfileEvents = (render) => {
 export const bindRoomManagePageEvents = (render) => {
   bindHomeEvents(render);
   bindRoomManageEvents(render);
-};
-
-export const bindAdminEvents = () => {
-  const output = document.querySelector('#adminOutput');
-  if (!output) return;
-
-  document.querySelector('[data-act="loadCards"]')?.addEventListener('click', async () => {
-    try {
-      const deck = safeTextValue('#adminDeck', 16);
-      const data = await callApi(`/admin/cards?deck=${encodeURIComponent(deck)}`);
-      output.textContent = JSON.stringify(data, null, 2);
-      setStatus('adminStatus', t('cardsLoaded', { deck }), true);
-    } catch (e) {
-      showApiError('adminStatus', e);
-    }
-  });
-
-  document.querySelector('[data-act="loadEffects"]')?.addEventListener('click', async () => {
-    try {
-      const data = await callApi('/admin/effects');
-      output.textContent = JSON.stringify(data, null, 2);
-      setStatus('adminStatus', t('effectsLoaded'), true);
-    } catch (e) {
-      showApiError('adminStatus', e);
-    }
-  });
-
-  document.querySelector('[data-act="patchCard"]')?.addEventListener('click', async () => {
-    try {
-      const deck = safeTextValue('#adminDeck', 16);
-      const cardCode = safeTextValue('#adminCardCode', 64);
-      const payload = {
-        name: safeTextValue('#adminCardName', 64),
-        text: safeTextValue('#adminCardText', 512),
-        enabled: Boolean(document.querySelector('#adminEnabled')?.checked),
-      };
-      const value = safeTextValue('#adminCardValue', 16);
-      const effectKey = safeTextValue('#adminEffectKey', 64);
-      if (value !== '') payload.value = Number(value);
-      if (effectKey !== '') payload.effectKey = effectKey;
-
-      const data = await callApi(`/admin/cards/${encodeURIComponent(deck)}/${encodeURIComponent(cardCode)}`, {
-        method: 'PATCH',
-        body: JSON.stringify(payload),
-      });
-      output.textContent = JSON.stringify(data, null, 2);
-      setStatus('adminStatus', t('cardUpdated'), true);
-    } catch (e) {
-      showApiError('adminStatus', e);
-    }
-  });
-};
-
-export const bindDebugEvents = () => {
-  const ui = {
-    apiBase: document.querySelector('#apiBase'),
-    checkHealth: document.querySelector('#checkHealth'),
-    wsUrl: document.querySelector('#wsUrl'),
-    wsConnect: document.querySelector('#wsConnect'),
-    roomId: document.querySelector('#roomId'),
-    subscribeRoom: document.querySelector('#subscribeRoom'),
-    sendPing: document.querySelector('#sendPing'),
-    sendEvent: document.querySelector('#sendEvent'),
-    eventName: document.querySelector('#eventName'),
-  };
-  if (!ui.apiBase || !ui.wsUrl || !ui.checkHealth || !ui.wsConnect) return;
-
-  ui.checkHealth.addEventListener('click', async () => {
-    try {
-      state.apiBase = parseSafeUrl(ui.apiBase.value, ['http:', 'https:']);
-      const data = await callApi('/health');
-      setStatus('healthStatus', `OK: ${JSON.stringify(data)}`, true);
-    } catch (error) {
-      setStatus('healthStatus', `${t('healthError')}: ${error.message}`);
-    }
-  });
-
-  ui.wsConnect.addEventListener('click', () => {
-    try {
-      state.wsUrl = parseSafeUrl(ui.wsUrl.value, ['ws:', 'wss:']);
-    } catch (error) {
-      setStatus('wsStatus', error.message);
-      return;
-    }
-
-    state.socket?.close();
-    state.socket = new WebSocket(state.wsUrl);
-
-    state.socket.onopen = () => {
-      setStatus('wsStatus', t('wsConnected'), true);
-      logDebug('socket open');
-      sendSocketMessage({ type: 'subscribe_lobbies' });
-    };
-    state.socket.onmessage = (event) => {
-      try {
-        logDebug(JSON.parse(event.data));
-      } catch {
-        logDebug(event.data);
-      }
-    };
-    state.socket.onclose = () => {
-      setStatus('wsStatus', t('wsClosed'));
-      logDebug('socket close');
-    };
-    state.socket.onerror = () => {
-      setStatus('wsStatus', t('wsError'));
-      logDebug('socket error');
-    };
-  });
-
-  ui.subscribeRoom?.addEventListener('click', () => {
-    if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return logDebug(t('connectSocketFirst'));
-    sendSocketMessage({ type: 'subscribe_room', roomId: safeTextValue('#roomId', 64) });
-  });
-
-  ui.sendPing?.addEventListener('click', () => {
-    if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return logDebug(t('connectSocketFirst'));
-    sendSocketMessage({ type: 'ping' });
-  });
-
-  ui.sendEvent?.addEventListener('click', () => {
-    if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return logDebug(t('connectSocketFirst'));
-    sendSocketMessage({
-      type: 'room_event',
-      roomId: safeTextValue('#roomId', 64),
-      event: safeTextValue('#eventName', 128),
-      data: { source: 'frontend' },
-    });
-  });
 };

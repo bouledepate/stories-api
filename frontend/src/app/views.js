@@ -2,6 +2,24 @@ import { state } from './state';
 import { t } from './i18n';
 import { esc } from './security';
 
+const formatClock = (timestamp) => {
+  const numeric = Number(timestamp || Date.now());
+  const date = Number.isFinite(numeric) ? new Date(numeric * (numeric < 10_000_000_000 ? 1000 : 1)) : new Date();
+  return new Intl.DateTimeFormat(state.lang === 'en' ? 'en-US' : 'ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+};
+
+const initialLetter = (value, fallback = '?') => String(value || fallback).trim().charAt(0).toUpperCase() || fallback;
+
+const roomAccessSummary = (room) => {
+  if (room.isPublic && room.hasPassword) return t('roomAccessPublicProtected');
+  if (room.isPublic) return t('roomAccessPublicOpen');
+  if (room.hasPassword) return t('roomAccessPrivateProtected');
+  return t('roomAccessPrivateCodeOnly');
+};
+
 export const renderAuthModal = () => {
   if (!state.authOpen || state.user) return '';
 
@@ -52,13 +70,25 @@ const renderRoomModal = () => {
         ${createMode ? `
         <div class="stack">
           <input id="roomName" placeholder="${t('roomName')}" />
-          <label><input id="roomIsPublic" type="checkbox" checked /> ${t('visibilityPublic')}</label>
-          <input id="roomPassword" placeholder="${t('roomPassword')}" type="password" />
+          <label class="toggle-row"><input id="roomIsPublic" type="checkbox" checked /> ${t('roomVisibilityPublicToggle')}</label>
+          <p class="field-help">${t('roomCreateAccessHint')}</p>
+          <label class="field-stack">
+            <span>${t('roomSize')}</span>
+            <select id="roomMaxPlayers">
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6" selected>6</option>
+            </select>
+          </label>
+          <input id="roomPassword" placeholder="${t('roomPasswordOptional')}" type="password" />
+          <p class="field-help">${t('roomPasswordHint')}</p>
           <button class="primary" data-act="createRoom">${t('createRoom')}</button>
         </div>` : `
         <div class="stack">
           <input id="inviteCode" placeholder="AB12CD" maxlength="6" />
-          <input id="joinPassword" placeholder="${t('roomPassword')}" type="password" />
+          <input id="joinPassword" placeholder="${t('roomPasswordOptional')}" type="password" />
           <label><input id="joinAsSpectator" type="checkbox" /> ${t('spectator')}</label>
           <button class="secondary" data-act="joinByCode">${t('connect')}</button>
         </div>`}
@@ -104,10 +134,10 @@ const renderLobbyRooms = () => {
             <div class="lobby-icon">${room.isPublic ? '☀' : '☾'}</div>
             <div class="lobby-meta">
               <h4>${esc(room.name)} ${room.hasPassword ? '<span class="inline-tag">🔒</span>' : ''}</h4>
-              <p>${room.isPublic ? t('visibilityPublic') : t('visibilityPrivate')} • ${room.hasPassword ? t('lobbyHasPassword') : t('lobbyNoPassword')}</p>
+              <p>${roomAccessSummary(room)}</p>
             </div>
-            <div class="lobby-count">👥 ${room.playersCount} / 8</div>
-            <button class="secondary" data-act="joinLobby" data-room-id="${esc(room.roomId)}" data-room-owner-id="${esc(room.ownerUserId || '')}" data-room-has-password="${room.hasPassword ? '1' : '0'}">${t('joinLobby')}</button>
+            <div class="lobby-count">👥 ${room.playersCount} / ${room.maxPlayers || 6}</div>
+            <button class="secondary" data-act="joinLobby" data-room-id="${esc(room.roomId)}" data-room-name="${esc(room.name)}" data-room-owner-id="${esc(room.ownerUserId || '')}" data-room-has-password="${room.hasPassword ? '1' : '0'}">${t('joinLobby')}</button>
           </article>
         `).join('')}
       </div>
@@ -118,18 +148,39 @@ const renderLobbyRooms = () => {
 const renderParticipant = (participant) => {
   const me = state.user?.id === participant.userId;
   const isOwnerRoom = state.user?.id && state.activeRoom?.ownerId === state.user.id;
-  const canKick = isOwnerRoom && participant.role === 'player' && participant.userId !== state.activeRoom?.ownerId;
-  const canBan = isOwnerRoom && participant.userId !== state.activeRoom?.ownerId;
+  const canKick = isOwnerRoom && participant.userId !== state.activeRoom?.ownerId;
+  const canBan = isOwnerRoom && participant.role === 'player' && participant.userId !== state.activeRoom?.ownerId;
+  const canTransferOwnership = isOwnerRoom && participant.role === 'player' && participant.userId !== state.activeRoom?.ownerId;
+  const roleLabelMap = {
+    owner: t('roleOwnerShort'),
+    player: t('rolePlayerShort'),
+    spectator: t('roleSpectatorShort'),
+  };
+
   return `
     <li class="participant-item">
-      <div>
-        <b class="role-${esc(participant.role)}">${esc(participant.username)}</b> ${me ? `<span class="inline-note">(${t('youLabel')})</span>` : ''}
+      <div class="participant-row">
+        <div class="participant-main">
+          <span class="participant-avatar role-${esc(participant.role)}">${esc(initialLetter(participant.username, 'U'))}</span>
+          <div class="participant-identity">
+            <div class="participant-name-row">
+              <b class="role-${esc(participant.role)}">${esc(participant.username)}</b>
+              ${me ? `<span class="inline-note">(${t('youLabel')})</span>` : ''}
+              ${participant.role === 'owner' ? `<span class="badge-chip owner-badge">${t('participantOwnerBadge')}</span>` : ''}
+            </div>
+            <div class="participant-meta">
+              ${esc(roleLabelMap[participant.role] || participant.role)}
+              <span class="status-dot ${participant.ready ? 'ready' : 'idle'}"></span>
+              <span class="ready-state ${participant.ready ? 'ready' : 'idle'}">${participant.ready ? t('participantReadyBadge') : t('participantNotReadyBadge')}</span>
+            </div>
+          </div>
+        </div>
+        ${(canKick || canBan || canTransferOwnership) ? `<div class="participant-actions participant-actions-inline">
+          ${canTransferOwnership ? `<button class="chip icon-chip" title="${t('transferOwnershipSymbolLabel')}" aria-label="${t('transferOwnership')}" data-act="transferOwnership" data-user-id="${esc(participant.userId)}">♔</button>` : ''}
+          ${canKick ? `<button class="chip icon-chip" title="${t('kickSymbolLabel')}" aria-label="${t('kickPlayer')}" data-act="kickParticipant" data-user-id="${esc(participant.userId)}">×</button>` : ''}
+          ${canBan ? `<button class="chip icon-chip" title="${t('banSymbolLabel')}" aria-label="${t('banPlayer')}" data-act="banParticipant" data-user-id="${esc(participant.userId)}">⛔</button>` : ''}
+        </div>` : ''}
       </div>
-      <div class="participant-meta">${esc(participant.role)} · ${participant.ready ? 'ready' : 'not ready'}</div>
-      ${(canKick || canBan) ? `<div class="participant-actions">
-        ${canKick ? `<button class="chip" data-act="kickParticipant" data-user-id="${esc(participant.userId)}">${t('kickPlayer')}</button>` : ''}
-        ${canBan ? `<button class="chip" data-act="banParticipant" data-user-id="${esc(participant.userId)}">${t('banPlayer')}</button>` : ''}
-      </div>` : ''}
     </li>
   `;
 };
@@ -141,20 +192,49 @@ const renderRoomPanel = () => {
   const players = participants.filter((participant) => participant.role !== 'spectator');
   const spectators = participants.filter((participant) => participant.role === 'spectator');
   const isOwner = Boolean(state.user?.id) && state.user.id === state.activeRoom.ownerId;
+  const myParticipant = participants.find((participant) => participant.userId === state.user?.id);
+  const canToggleReady = myParticipant?.role === 'owner' || myParticipant?.role === 'player';
+  const visibilityLabel = state.activeRoom.isPublic ? t('visibilityPublic') : t('visibilityPrivate');
+  const accessLabel = state.activeRoom.hasPassword ? t('roomProtected') : t('roomOpenAccess');
+  const playersLabel = `${players.length} / ${state.activeRoom.maxPlayers || 6}`;
 
   return `
     <article class="room-panel">
-      <h3>${t('roomDetails')}</h3>
-      <div class="room-meta">
-        <div class="room-code-row"><span>${t('roomCode')}:</span> <b>${esc(state.activeRoom.inviteCode || '—')}</b> ${isOwner ? `<button class="chip room-code-action" data-act="regenInvite">${t('regenerateInvite')}</button>` : ''}</div>
-        <div><span>${t('roomOwnerName')}:</span> <b>${esc(state.activeRoom.ownerUsername || state.activeRoom.ownerId || '—')}</b></div>
+      <div class="room-panel-head">
+        <div>
+          <div class="hero-kicker">${t('roomDetails')}</div>
+          <h3 class="room-title">${esc(state.activeRoom.name || t('roomDetails'))}</h3>
+        </div>
+        <div class="room-live-pill">${t('roomLiveSync')}</div>
+      </div>
+      <div class="room-meta room-meta-cards">
+        <div class="room-stat-card room-stat-code">
+          <span>${t('roomCode')}</span>
+          <div class="room-stat-main room-code-row"><b>${esc(state.activeRoom.inviteCode || '—')}</b> ${isOwner ? `<button class="chip room-code-action icon-chip" title="${t('regenerateInvite')}" aria-label="${t('regenerateInvite')}" data-act="regenInvite">${t('regenerateInviteShort')}</button>` : ''}</div>
+        </div>
+        <div class="room-stat-card">
+          <span>${t('roomOwnerName')}</span>
+          <div class="room-stat-main">${esc(state.activeRoom.ownerUsername || state.activeRoom.ownerId || '—')}</div>
+        </div>
+        <div class="room-stat-card">
+          <span>${t('roomVisibilityLabel')}</span>
+          <div class="room-stat-main">${visibilityLabel}</div>
+        </div>
+        <div class="room-stat-card">
+          <span>${t('roomAccessLabel')}</span>
+          <div class="room-stat-main">${roomAccessSummary(state.activeRoom)}</div>
+        </div>
+        <div class="room-stat-card">
+          <span>${t('roomStatsLabel')}</span>
+          <div class="room-stat-main">${playersLabel}</div>
+        </div>
       </div>
       <div class="room-lists">
-        <div>
+        <div class="room-list-card">
           <h4>${t('roomParticipants')} (${players.length})</h4>
           <ul class="participant-list">${players.map(renderParticipant).join('')}</ul>
         </div>
-        <div>
+        <div class="room-list-card">
           <h4>${t('roomSpectators')} (${spectators.length})</h4>
           <ul class="participant-list">${spectators.map(renderParticipant).join('')}</ul>
         </div>
@@ -162,12 +242,12 @@ const renderRoomPanel = () => {
       <div class="stack">
         <h4>${t('roomActions')}</h4>
         <div class="room-actions">
-          <button class="secondary" data-act="refreshRoom">${t('refreshRoom')}</button>
-          <button class="secondary" data-act="readyRoom">${((participants.find((participant) => participant.userId === state.user?.id)?.ready) ? t('markNotReady') : t('markReady'))}</button>
-          <button class="primary" data-act="startGame">${t('startGame')}</button>
+          ${canToggleReady ? `<button class="secondary" data-act="readyRoom">${(myParticipant?.ready ? t('markNotReady') : t('markReady'))}</button>` : ''}
+          ${isOwner ? `<button class="secondary" data-act="openRoomSettings">${t('openRoomSettings')}</button>` : ''}
           <button class="chip" data-act="leaveRoom">${isOwner ? t('closeOwnedRoom') : t('leaveRoom')}</button>
         </div>
       </div>
+      <div id="roomStatus" class="status">${esc(state.roomStatusMessage || '')}</div>
     </article>
   `;
 };
@@ -177,27 +257,28 @@ const renderRoomManage = () => {
     return '';
   }
 
-  const canManage = state.activeRoom.ownerId === state.user?.id;
-
   return `
     <div class="room-manage-layout">
-      <article class="room-manage-main">
-        <h3>${t('roomManageTitle')}</h3>
-        ${canManage ? `<div class="stack">
-          <label><input id="manageIsPublic" type="checkbox" ${state.activeRoom.isPublic ? 'checked' : ''} /> ${t('visibilityPublic')}</label>
-          <input id="managePassword" type="password" placeholder="${t('roomPassword')}" />
-          <div class="row">
-            <button class="primary" data-act="saveRoomSettings">${t('saveRoomSettings')}</button>
+      <article class="room-chat-wide">
+        <div class="room-chat-head">
+          <div>
+            <h3>${t('roomChat')}</h3>
+            <p class="room-section-hint">${t('roomChatHint')}</p>
           </div>
-        </div>` : `<p class="status">${t('roomManageReadonly')}</p>`}
-      </article>
-
-      <article class="room-chat-sidebar">
-        <h3>${t('roomChat')}</h3>
-        <div class="chat-log">
-          ${(state.roomChatMessages || []).map((msg) => `<div class="chat-line role-${esc(msg.role || 'system')}">
-            <b>${esc(msg.username || t('roleSystem'))}</b>: ${esc(msg.text || '')}
-          </div>`).join('')}
+        </div>
+        <div class="chat-log" id="roomChatLog">
+          ${(state.roomChatMessages || []).length === 0 ? `<div class="chat-empty">${t('roomChatEmpty')}</div>` : (state.roomChatMessages || []).map((msg) => {
+            const isSelf = msg.userId && state.user?.id && msg.userId === state.user.id;
+            const lineClass = msg.role === 'system' ? 'system' : (isSelf ? 'self' : 'remote');
+            const username = isSelf ? t('selfMessageLabel') : (msg.username || t('roleSystem'));
+            return `<div class="chat-line ${lineClass}">
+              <div class="chat-meta-row">
+                <span class="chat-author">${esc(username)}</span>
+                <span class="chat-time">${esc(formatClock(msg.timestamp))}</span>
+              </div>
+              <div class="chat-bubble">${esc(msg.text || '')}</div>
+            </div>`;
+          }).join('')}
         </div>
         <div class="row topgap">
           <input id="roomChatInput" placeholder="${t('chatPlaceholder')}" />
@@ -206,6 +287,44 @@ const renderRoomManage = () => {
       </article>
     </div>
     <div id="roomManageStatus" class="status"></div>
+  `;
+};
+
+const renderRoomSettingsModal = () => {
+  if (!state.roomSettingsOpen || !state.activeRoom || state.activeRoom.ownerId !== state.user?.id) return '';
+
+  return `
+    <div class="modal-overlay" data-act="closeRoomSettings"></div>
+    <section class="modal room-modal">
+      <div class="modal-head">
+        <div>
+          <h2>${t('roomSettingsModalTitle')}</h2>
+          <p>${t('roomSettingsHint')}</p>
+        </div>
+        <button class="chip" data-act="closeRoomSettings">${t('close')}</button>
+      </div>
+      <article class="auth-card">
+        <div class="stack">
+          <div class="settings-card">
+            <label class="toggle-row"><input id="manageIsPublic" type="checkbox" ${state.activeRoom.isPublic ? 'checked' : ''} /> ${t('roomVisibilityPublicToggle')}</label>
+            <p class="field-help">${t('roomCreateAccessHint')}</p>
+            <label class="field-stack">
+              <span>${t('roomSize')}</span>
+              <select id="manageMaxPlayers">
+                ${[2, 3, 4, 5, 6].map((value) => `<option value="${value}" ${Number(state.activeRoom.maxPlayers || 6) === value ? 'selected' : ''}>${value}</option>`).join('')}
+              </select>
+            </label>
+            <p class="field-help">${t('roomSizeHelp')}</p>
+          </div>
+          <input id="managePassword" type="password" placeholder="${t('roomPasswordOptional')}" />
+          <p class="field-help">${t('roomPasswordHint')}</p>
+          <div class="row">
+            <button class="primary" data-act="saveRoomSettings">${t('saveRoomSettings')}</button>
+          </div>
+        </div>
+      </article>
+      <div id="roomManageStatus" class="status"></div>
+    </section>
   `;
 };
 
@@ -221,11 +340,6 @@ export const renderLobbies = () => `
   <p>${t('lobbyHint')}</p>
   <article>
     <div class="row">
-      <select id="lobbyVisibility">
-        <option value="all" ${state.lobbyFilters.visibility === 'all' ? 'selected' : ''}>${t('visibilityAll')}</option>
-        <option value="public" ${state.lobbyFilters.visibility === 'public' ? 'selected' : ''}>${t('visibilityPublic')}</option>
-        <option value="private" ${state.lobbyFilters.visibility === 'private' ? 'selected' : ''}>${t('visibilityPrivate')}</option>
-      </select>
       <select id="lobbyPasswordFilter">
         <option value="all" ${state.lobbyFilters.password === 'all' ? 'selected' : ''}>${t('passwordAll')}</option>
         <option value="with_password" ${state.lobbyFilters.password === 'with_password' ? 'selected' : ''}>${t('passwordWith')}</option>
@@ -233,7 +347,9 @@ export const renderLobbies = () => `
       </select>
       <input id="lobbyLimit" type="number" min="1" max="100" value="${state.lobbyFilters.limit}" />
       <button class="secondary" data-act="loadLobbies">${t('loadLobbies')}</button>
+      <button class="chip" data-act="heroJoin">${t('connectCode')}</button>
     </div>
+    <p class="room-section-hint">${t('lobbyCatalogHint')}</p>
   </article>
   <div class="lobby-list topgap">
     ${state.lobbyCatalog.length === 0 ? `<article><p>${t('lobbyNoItems')}</p></article>` : state.lobbyCatalog.map((room) => `
@@ -241,10 +357,10 @@ export const renderLobbies = () => `
         <div class="lobby-icon">${room.isPublic ? '☀' : '☾'}</div>
         <div class="lobby-meta">
           <h4>${esc(room.name)}</h4>
-          <p>${room.status} • ${room.hasPassword ? t('lobbyHasPassword') : t('lobbyNoPassword')}</p>
+          <p>${roomAccessSummary(room)}</p>
         </div>
-        <div class="lobby-count">👥 ${room.playersCount} / 8</div>
-        <button class="secondary" data-act="joinLobby" data-room-id="${esc(room.roomId)}" data-room-owner-id="${esc(room.ownerUserId || '')}" data-room-has-password="${room.hasPassword ? '1' : '0'}">${t('joinLobby')}</button>
+        <div class="lobby-count">👥 ${room.playersCount} / ${room.maxPlayers || 6}</div>
+        <button class="secondary" data-act="joinLobby" data-room-id="${esc(room.roomId)}" data-room-name="${esc(room.name)}" data-room-owner-id="${esc(room.ownerUserId || '')}" data-room-has-password="${room.hasPassword ? '1' : '0'}">${t('joinLobby')}</button>
       </article>
     `).join('')}
   </div>
@@ -259,17 +375,47 @@ const renderJoinLobbyModal = () => {
       <div class="modal-head">
         <div>
           <h2>${t('joinLobby')}</h2>
-          <p>${state.joinLobbyNeedsPassword ? t('joinPasswordHint') : t('joinWithoutPasswordHint')}</p>
+          <p>${state.joinLobbyNeedsPassword ? t('joinPasswordHint') : t('joinPublicLobbyHint')}</p>
         </div>
         <button class="chip" data-act="closeJoinLobbyModal">${t('close')}</button>
       </div>
       <article class="auth-card">
         <div class="stack">
-          ${state.joinLobbyNeedsPassword ? `<input id="lobbyJoinPassword" placeholder="${t('roomPassword')}" type="password" />` : ''}
+          ${state.joinLobbyNeedsPassword ? `<input id="lobbyJoinPassword" placeholder="${t('roomPasswordOptional')}" type="password" />` : ''}
           <button class="primary" data-act="confirmJoinLobby">${t('connect')}</button>
         </div>
       </article>
       <div id="joinLobbyStatus" class="status"></div>
+    </section>
+  `;
+};
+
+const renderRoomSwitchModal = () => {
+  if (!state.roomSwitchPromptOpen) return '';
+
+  const actionLabel = state.roomSwitchPromptMode === 'close' ? t('closeAndJoinRoom') : t('leaveAndJoinRoom');
+  const hint = state.roomSwitchPromptMode === 'close'
+    ? t('roomSwitchCloseHint', { target: state.roomSwitchTargetLabel || 'room' })
+    : t('roomSwitchLeaveHint', { target: state.roomSwitchTargetLabel || 'room' });
+
+  return `
+    <div class="modal-overlay" data-act="closeRoomSwitchModal"></div>
+    <section class="modal room-modal">
+      <div class="modal-head">
+        <div>
+          <h2>${t('roomSwitchTitle')}</h2>
+          <p>${hint}</p>
+        </div>
+        <button class="chip" data-act="closeRoomSwitchModal">${t('close')}</button>
+      </div>
+      <div class="room-switch-accent">${t('roomSwitchAccent')}</div>
+      <article class="auth-card">
+        <div class="row">
+          <button class="primary" data-act="confirmRoomSwitch">${actionLabel}</button>
+          <button class="secondary" data-act="cancelRoomSwitch">${t('close')}</button>
+        </div>
+      </article>
+      <div id="roomSwitchStatus" class="status"></div>
     </section>
   `;
 };
@@ -321,71 +467,6 @@ export const renderProfile = () => {
   `;
 };
 
-const renderAdminTools = () => `
-  <article>
-    <h3>${t('deckLoad')}</h3>
-    <div class="stack">
-      <select id="adminDeck">
-        <option value="character">character</option>
-        <option value="decree">decree</option>
-        <option value="event">event</option>
-      </select>
-      <button class="primary" data-act="loadCards">${t('loadCards')}</button>
-      <button class="secondary" data-act="loadEffects">${t('loadEffects')}</button>
-    </div>
-  </article>
-  <article>
-    <h3>${t('patchCard')}</h3>
-    <div class="stack">
-      <input id="adminCardCode" placeholder="${t('cardCode')}" />
-      <input id="adminCardName" placeholder="${t('newName')}" />
-      <input id="adminCardText" placeholder="${t('newText')}" />
-      <input id="adminCardValue" placeholder="${t('valueOrEmpty')}" />
-      <input id="adminEffectKey" placeholder="${t('effectKey')}" />
-      <label><input id="adminEnabled" type="checkbox" checked /> ${t('enabled')}</label>
-      <button class="primary" data-act="patchCard">${t('applyPatch')}</button>
-    </div>
-  </article>
-`;
-
-const renderDebug = () => `
-  <article>
-    <h3>API / WebSocket Debug</h3>
-    <div class="row">
-      <input id="apiBase" value="${esc(state.apiBase)}" />
-      <button id="checkHealth" class="secondary">${t('checkHealth')}</button>
-    </div>
-    <div id="healthStatus" class="status">${t('waitingRequest')}</div>
-    <div class="row topgap">
-      <input id="wsUrl" value="${esc(state.wsUrl)}" />
-      <button id="wsConnect" class="secondary">${t('connectWs')}</button>
-    </div>
-    <div class="row topgap">
-      <input id="roomId" placeholder="roomId" />
-      <button id="subscribeRoom">${t('subscribe')}</button>
-      <button id="sendPing">${t('sendPing')}</button>
-    </div>
-    <div class="row topgap">
-      <input id="eventName" value="frontend_debug" />
-      <button id="sendEvent">${t('sendEvent')}</button>
-    </div>
-    <div id="wsStatus" class="status">${t('wsNotConnected')}</div>
-    <div id="debugLog" class="log"></div>
-  </article>
-`;
-
-export const renderControlPanel = () => `
-  <h2>${t('controlPanelTitle')}</h2>
-  <p>${t('controlPanelHint')}</p>
-  <div class="grid">
-    ${renderAdminTools()}
-    ${renderDebug()}
-  </div>
-  <div id="adminStatus" class="status"></div>
-  <pre id="adminOutput" class="json"></pre>
-`;
-
-
 const renderRoomNotice = () => {
   if (!state.roomNoticeMessage) return '';
 
@@ -403,23 +484,27 @@ export const renderLayout = () => {
   return `
   <main class="layout dark">
     <header class="topbar">
-      <div class="brand-mini">
-        <h2>LETTERS: NO MERCY</h2>
-        <p class="brand-sub">Dark Medieval Stories</p>
-      </div>
-      <nav class="main-nav">
-        <button class="tab ${state.activeTab === 'home' ? 'active' : ''}" data-tab="home">${t('navHome')}</button>
-        <button class="tab ${state.activeTab === 'lobbies' ? 'active' : ''}" data-tab="lobbies">${t('navLobbies')}</button>
-        ${state.activeRoom ? `<button class="tab ${state.activeTab === 'roomManage' ? 'active' : ''}" data-tab="roomManage">${t('roomManage')}</button>` : ''}
-        <button class="tab ${state.activeTab === 'profile' ? 'active' : ''}" data-tab="profile">${t('navProfile')}</button>
-      </nav>
-      <div class="topbar-actions">
-        <button class="primary" data-act="heroCreate">＋ ${t('heroCreate')}</button>
-        <div class="lang-switch compact">
-          <button class="chip ${state.lang === 'ru' ? 'active' : ''}" data-lang="ru">RU</button>
-          <button class="chip ${state.lang === 'en' ? 'active' : ''}" data-lang="en">EN</button>
+      <div class="topbar-brand">
+        <div class="brand-mini">
+          <h2>${t('appName')}</h2>
+          <p class="brand-sub">${t('appGenre')}</p>
         </div>
-        ${authAction}
+      </div>
+      <div class="topbar-content">
+        <nav class="main-nav">
+          <button class="tab ${state.activeTab === 'home' ? 'active' : ''}" data-tab="home">${t('navHome')}</button>
+          <button class="tab ${state.activeTab === 'lobbies' ? 'active' : ''}" data-tab="lobbies">${t('navLobbies')}</button>
+          ${state.activeRoom ? `<button class="tab ${state.activeTab === 'roomManage' ? 'active' : ''}" data-tab="roomManage">${t('navRoomActive')}</button>` : ''}
+          <button class="tab ${state.activeTab === 'profile' ? 'active' : ''}" data-tab="profile">${t('navProfile')}</button>
+        </nav>
+        <div class="topbar-actions">
+          <button class="primary topbar-create" data-act="heroCreate">＋ ${t('quickCreateRoom')}</button>
+          <div class="lang-switch compact">
+            <button class="chip ${state.lang === 'ru' ? 'active' : ''}" data-lang="ru">RU</button>
+            <button class="chip ${state.lang === 'en' ? 'active' : ''}" data-lang="en">EN</button>
+          </div>
+          ${authAction}
+        </div>
       </div>
     </header>
 
@@ -429,11 +514,12 @@ export const renderLayout = () => {
     <section class="panel ${state.activeTab === 'lobbies' ? '' : 'hidden'} cinematic-panel">${renderLobbies()}</section>
     <section class="panel ${state.activeTab === 'roomManage' ? '' : 'hidden'} cinematic-panel">${renderRoomPanel()}${renderRoomManage()}</section>
     <section class="panel ${state.activeTab === 'profile' ? '' : 'hidden'} cinematic-panel">${renderProfile()}</section>
-    ${state.user?.role === 'admin' ? `<section class="panel ${state.activeTab === 'control' ? '' : 'hidden'}">${renderControlPanel()}</section>` : ''}
 
     ${renderAuthModal()}
     ${renderRoomModal()}
+    ${renderRoomSettingsModal()}
     ${renderJoinLobbyModal()}
+    ${renderRoomSwitchModal()}
     <div id="toastContainer" class="toast-container"></div>
   </main>`;
 };

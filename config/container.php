@@ -13,14 +13,13 @@ use Stories\Shared\Cache\RedisConfig;
 use Stories\Shared\Security\JwtService;
 use Stories\Slices\Rooms\Service\RoomService;
 use Yiisoft\Translator\CategorySource;
-use Yiisoft\Translator\Message\Php\PhpMessageSource;
+use Yiisoft\Translator\Message\Php\MessageSource;
 use Yiisoft\Translator\Translator;
 use Yiisoft\Translator\TranslatorInterface;
 use Yiisoft\Validator\Validator;
 
 return static function (array $env): ContainerBuilder {
     $jwtSecret = (string) ($env['JWT_SECRET'] ?? 'change-me');
-    $disconnectGraceSeconds = (int) ($env['DISCONNECT_GRACE_SECONDS'] ?? 30);
     $inviteRotateCooldownSeconds = (int) ($env['INVITE_ROTATE_COOLDOWN_SECONDS'] ?? 60);
     $appLogFile = (string) ($env['APP_LOG_FILE'] ?? (__DIR__ . '/../var/logs/app.log'));
 
@@ -44,13 +43,12 @@ return static function (array $env): ContainerBuilder {
         },
         TranslatorInterface::class => static function (): TranslatorInterface {
             $translator = new Translator('en');
-            $source = new PhpMessageSource(dirname(__DIR__) . '/messages');
+            $source = new MessageSource(dirname(__DIR__) . '/messages');
             $translator->addCategorySources(new CategorySource('app', $source));
 
             return $translator;
         },
         RoomService::class => DI\autowire()
-            ->constructorParameter('disconnectGraceSeconds', $disconnectGraceSeconds)
             ->constructorParameter('inviteRotateCooldownSeconds', $inviteRotateCooldownSeconds),
     ]);
 

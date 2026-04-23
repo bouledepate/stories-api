@@ -112,6 +112,36 @@ final class ParticipantRepository
         return $role === false ? null : (string) $role;
     }
 
+    public function findLatestRoomIdForUser(string $userId): ?string
+    {
+        $roomId = $this->db->createQueryBuilder()
+            ->select('p.room_id')
+            ->from('room_participants', 'p')
+            ->innerJoin('p', 'rooms', 'r', 'r.id = p.room_id')
+            ->where('p.user_id = :userId')
+            ->orderBy('p.joined_at', 'DESC')
+            ->addOrderBy('r.created_at', 'DESC')
+            ->setParameter('userId', $userId)
+            ->setMaxResults(1)
+            ->fetchOne();
+
+        return $roomId === false ? null : (string) $roomId;
+    }
+
+    public function countPlayers(string $roomId): int
+    {
+        $count = $this->db->createQueryBuilder()
+            ->select('COUNT(*)')
+            ->from('room_participants', 'p')
+            ->where('p.room_id = :roomId')
+            ->andWhere('p.role IN (:roles)')
+            ->setParameter('roomId', $roomId)
+            ->setParameter('roles', ['owner', 'player'], ArrayParameterType::STRING)
+            ->fetchOne();
+
+        return $count === false ? 0 : (int) $count;
+    }
+
     /** @return list<string> */
     public function fetchReadyPlayerIds(string $roomId): array
     {

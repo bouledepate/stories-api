@@ -21,6 +21,7 @@ final class RoomSnapshotBuilder
             'ownerUsername' => $room->ownerUsername,
             'inviteCode' => $room->inviteCode,
             'isPublic' => $room->isPublic,
+            'maxPlayers' => $room->maxPlayers,
             'hasPassword' => $room->passwordHash !== null,
             'participants' => $this->participantRepository->fetchSnapshotParticipants($room->id),
         ];

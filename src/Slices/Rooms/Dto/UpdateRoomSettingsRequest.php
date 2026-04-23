@@ -13,6 +13,8 @@ final class UpdateRoomSettingsRequest
     public function __construct(
         public readonly bool $isPublic,
 
+        public readonly int $maxPlayers = 6,
+
         #[StringValue]
         #[Length(min: 0, max: 128)]
         public readonly string $password = ''
@@ -24,6 +26,7 @@ final class UpdateRoomSettingsRequest
     {
         return new self(
             BooleanNormalizer::fromMixed($data['isPublic'] ?? null, true),
+            max(2, min(6, (int) ($data['maxPlayers'] ?? 6))),
             trim((string) ($data['password'] ?? '')),
         );
     }

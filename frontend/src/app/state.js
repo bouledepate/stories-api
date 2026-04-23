@@ -1,17 +1,17 @@
 const wsHost = (window.location.hostname === '0.0.0.0' || window.location.hostname === '') ? 'localhost' : window.location.hostname;
 const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+const persistedRoomId = localStorage.getItem('stories_active_room_id') || '';
 
 export const state = {
   apiBase: window.location.origin,
   wsUrl: `${wsProtocol}://${wsHost}:8081`,
   token: localStorage.getItem('stories_token') || '',
   user: null,
-  activeRoom: null,
+  activeRoom: persistedRoomId ? { roomId: persistedRoomId } : null,
   activeTab: 'home',
   homeLobbies: [],
   lobbyCatalog: [],
   lobbyFilters: {
-    visibility: 'all',
     password: 'all',
     limit: 20,
   },
@@ -21,13 +21,22 @@ export const state = {
   authMode: 'login',
   roomModalOpen: false,
   roomModalMode: 'create',
+  roomSettingsOpen: false,
   joinLobbyModalOpen: false,
   joinLobbyRoomId: '',
   joinLobbyOwnerUserId: '',
+  joinLobbyRoomName: '',
   joinLobbyNeedsPassword: false,
   joinLobbyPassword: '',
+  roomSwitchPromptOpen: false,
+  roomSwitchPromptMode: 'leave',
+  roomSwitchTargetLabel: '',
+  pendingJoinAction: null,
+  suppressOwnJoinPresence: Boolean(persistedRoomId),
   roomChatMessages: [],
+  roomChatInputShouldFocus: false,
   homeStatusMessage: '',
   myRooms: [],
   roomNoticeMessage: '',
+  roomStatusMessage: '',
 };
