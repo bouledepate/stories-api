@@ -56,7 +56,43 @@ final class TurnResolver
             return $pendingDecision->originActorUserId;
         }
 
+        if ($pendingDecision->type === 'queen_decree_suppression') {
+            $this->resolveQueenDecreeSuppression($round, $play, $pendingDecision);
+            return $pendingDecision->originActorUserId;
+        }
+
         throw new ApiException(ApiErrorCode::MATCH_STATE_INVALID);
+    }
+
+    private function resolveQueenDecreeSuppression(RoundState $round, CardPlay $play, \Stories\Domain\Matches\Model\PendingDecision $pendingDecision): void
+    {
+        $targetDecreeCode = $play->targetDecreeCode;
+        $availableDecrees = $pendingDecision->availableDecrees;
+        $selectedDecree = null;
+        foreach ($availableDecrees as $decree) {
+            if (!is_array($decree) || (string) ($decree['code'] ?? '') !== $targetDecreeCode) {
+                continue;
+            }
+
+            $selectedDecree = $decree;
+            break;
+        }
+
+        if ($selectedDecree === null || $targetDecreeCode === null || $targetDecreeCode === '') {
+            throw new ApiException(ApiErrorCode::TARGET_PLAYER_REQUIRED);
+        }
+
+        $round->suppressDecree($targetDecreeCode);
+        $round->lastAction = new RoundAction(
+            'queen_decree_suppressed',
+            $play->actorUserId,
+            $pendingDecision->cardCode,
+            $pendingDecision->cardName,
+            gmdate(DATE_ATOM),
+            targetCardCode: $targetDecreeCode,
+            targetCardName: (string) ($selectedDecree['title'] ?? $targetDecreeCode),
+        );
+        $round->clearPendingDecision();
     }
 
     private function resolveFeudalPendingDecision(RoundState $round, CardPlay $play, \Stories\Domain\Matches\Model\PendingDecision $pendingDecision): void

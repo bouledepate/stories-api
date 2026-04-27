@@ -47,6 +47,13 @@ final class MatchViewFormatter
                 'hasSetAsideCard' => true,
                 'revealedCards' => $this->cardsToArray($round->revealedCards),
                 'deckCount' => count($round->deck),
+                'activeDecrees' => array_map(
+                    static fn ($decree): array => [
+                        ...$decree->toArray(),
+                        'suppressedByQueen' => $round->isDecreeSuppressed($decree->code),
+                    ],
+                    $match->activeDecrees,
+                ),
                 'hasPendingDecision' => $round->hasPendingDecision(),
                 'players' => $playersView,
                 'pendingDecision' => $round->pendingDecision?->actorUserId === $viewerUserId
@@ -65,6 +72,7 @@ final class MatchViewFormatter
             'roundNumber' => $match->roundNumber,
             'winnerUserId' => $match->winnerUserId,
             'players' => array_map(static fn (MatchPlayer $player): array => $player->toArray(), $match->players),
+            'activeDecrees' => array_map(static fn ($decree): array => $decree->toArray(), $match->activeDecrees),
             'currentRound' => $roundView,
             'lastRoundSummary' => $match->lastRoundSummary ? [
                 'roundNumber' => $match->lastRoundSummary->roundNumber,

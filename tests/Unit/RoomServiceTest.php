@@ -21,6 +21,7 @@ use Stories\Application\Rooms\Support\RoomUseCaseSupport;
 use Stories\Application\Rooms\TransferOwnership\TransferOwnershipHandler;
 use Stories\Application\Rooms\UpdateRoomSettings\UpdateRoomSettingsHandler;
 use Stories\Domain\Matches\Card\CharacterCardRegistry;
+use Stories\Domain\Matches\Decree\DecreeRegistry;
 use Stories\Infrastructure\Persistence\Matches\DbalMatchesRepository;
 use Stories\Infrastructure\Persistence\Rooms\DbalRoomBansRepository;
 use Stories\Infrastructure\Persistence\Rooms\DbalRoomParticipantsRepository;
@@ -52,7 +53,7 @@ final class RoomServiceTest extends TestCase
         $cards = new CharacterCardRegistry();
         $deckFactory = new CharacterDeckFactory($cards);
         $eliminations = new PlayerEliminationService();
-        $effectResolver = new CardEffectResolver($cards, $eliminations);
+        $effectResolver = new CardEffectResolver($cards, new DecreeRegistry(), $eliminations);
         $engine = new MatchEngine(
             new RoundSetupFactory($deckFactory),
             new TurnResolver($effectResolver, $eliminations),

@@ -234,6 +234,7 @@ export const playMatchCard = async (render, cardCode, options = {}) => {
         cardInstanceId: options.cardInstanceId || null,
         shouldSwap: typeof options.shouldSwap === 'boolean' ? options.shouldSwap : null,
         shouldReact: typeof options.shouldReact === 'boolean' ? options.shouldReact : null,
+        targetDecreeCode: options.targetDecreeCode || null,
       }),
     });
     setGameCardPlayPrompt(null);

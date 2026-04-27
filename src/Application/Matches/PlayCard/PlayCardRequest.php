@@ -21,6 +21,7 @@ final class PlayCardRequest
         public readonly ?string $secondTargetUserId = null,
         public readonly ?bool $shouldReact = null,
         public readonly ?bool $shouldSwap = null,
+        public readonly ?string $targetDecreeCode = null,
     ) {
     }
 
@@ -35,6 +36,7 @@ final class PlayCardRequest
             isset($data['secondTargetUserId']) ? trim((string) $data['secondTargetUserId']) : null,
             array_key_exists('shouldReact', $data) ? (bool) $data['shouldReact'] : null,
             array_key_exists('shouldSwap', $data) ? (bool) $data['shouldSwap'] : null,
+            isset($data['targetDecreeCode']) ? trim((string) $data['targetDecreeCode']) : null,
         );
     }
 }

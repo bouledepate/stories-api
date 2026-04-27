@@ -14,6 +14,7 @@ final class RoundState
      * @param list<Card> $revealedCards
      * @param array<string,RoundPlayerState> $players
      * @param list<string> $roundWinners
+     * @param list<string> $suppressedDecreeCodes
      */
     public function __construct(
         public RoundStatus $status,
@@ -26,6 +27,7 @@ final class RoundState
         public ?RoundFinishedReason $finishedReason,
         public array $roundWinners,
         public ?PendingDecision $pendingDecision = null,
+        public array $suppressedDecreeCodes = [],
     ) {
     }
 
@@ -57,6 +59,10 @@ final class RoundState
         $setAsideCard = is_array($setAsideData) ? Card::fromArray($setAsideData) : new Card('', '', 0);
         $lastActionData = $data['lastAction'] ?? null;
         $pendingDecisionData = $data['pendingDecision'] ?? null;
+        $suppressedDecreeCodes = array_values(array_map(
+            static fn (mixed $item): string => (string) $item,
+            (array) ($data['suppressedDecreeCodes'] ?? [])
+        ));
 
         return new self(
             RoundStatus::tryFrom((string) ($data['status'] ?? 'active')) ?? RoundStatus::ACTIVE,
@@ -69,6 +75,7 @@ final class RoundState
             isset($data['finishedReason']) ? RoundFinishedReason::tryFrom((string) $data['finishedReason']) : null,
             array_values(array_map(static fn (mixed $item): string => (string) $item, (array) ($data['roundWinners'] ?? []))),
             is_array($pendingDecisionData) ? PendingDecision::fromArray($pendingDecisionData) : null,
+            $suppressedDecreeCodes,
         );
     }
 
@@ -121,6 +128,20 @@ final class RoundState
     public function clearPendingDecision(): void
     {
         $this->pendingDecision = null;
+    }
+
+    public function suppressDecree(string $decreeCode): void
+    {
+        if (in_array($decreeCode, $this->suppressedDecreeCodes, true)) {
+            return;
+        }
+
+        $this->suppressedDecreeCodes[] = $decreeCode;
+    }
+
+    public function isDecreeSuppressed(string $decreeCode): bool
+    {
+        return in_array($decreeCode, $this->suppressedDecreeCodes, true);
     }
 
     public function drawFor(string $userId): void
@@ -178,6 +199,7 @@ final class RoundState
             'revealedCards' => array_map(static fn (Card $card): array => $card->toArray(), $this->revealedCards),
             'players' => $players,
             'pendingDecision' => $this->pendingDecision?->toArray(),
+            'suppressedDecreeCodes' => array_values($this->suppressedDecreeCodes),
             'lastAction' => $this->lastAction?->toArray(),
             'finishedReason' => $this->finishedReason?->value,
             'roundWinners' => array_values($this->roundWinners),

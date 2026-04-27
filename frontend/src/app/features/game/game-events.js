@@ -1,12 +1,20 @@
 import { state } from '../../state';
 import { t } from '../../i18n';
 import { showToast } from '../../services/feedback';
-import { getActiveMatchOpponents, getTargetableMatchPlayers, isMyTurnInMatch } from '../../store/selectors';
+import { getActiveMatchOpponents, getCurrentRound, getTargetableMatchPlayers, isMyTurnInMatch } from '../../store/selectors';
 import { patchGameCardPlayPrompt, setActiveTab, setGameCardPlayPrompt, setGameCardPreview, setGameChatOpen, setGameChatUnreadCount, setGameConfirmPrompt } from '../../store/mutations';
 import { matchCardCatalog } from './card-catalog';
 import { leaveFinishedMatchRoom, leaveGameAndRoom, playMatchCard, sendGameChatMessage, startMatchFromRoom, syncGameChatScroll } from './game-flow';
 
 export const bindGameEvents = (render) => {
+  const canGuardGuessCard = (cardCode) => {
+    if (cardCode !== 'guard') return matchCardCatalog.some((card) => card.code === cardCode);
+
+    return (getCurrentRound()?.activeDecrees || []).some(
+      (decree) => decree?.code === 'free_interrogation' && !decree?.suppressedByQueen
+    );
+  };
+
   document.querySelector('[data-act="toggleGameChat"]')?.addEventListener('click', () => {
     const nextOpen = !state.gameChatOpen;
     setGameChatOpen(nextOpen);
@@ -165,7 +173,7 @@ export const bindGameEvents = (render) => {
       showToast(t('targetPlayerRequired'));
       return;
     }
-    if (!prompt?.guessedCardCode || !matchCardCatalog.some((card) => card.code === prompt.guessedCardCode && card.code !== 'guard')) {
+    if (!prompt?.guessedCardCode || !canGuardGuessCard(prompt.guessedCardCode)) {
       showToast(t('guardGuessRequired'));
       return;
     }
@@ -277,6 +285,12 @@ export const bindGameEvents = (render) => {
 
   document.querySelector('[data-act="resolveGuardMiss"]')?.addEventListener('click', async () => {
     await playMatchCard(render, 'peasant', { shouldReact: false });
+  });
+
+  document.querySelectorAll('[data-act="confirmQueenDecreeSuppression"]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await playMatchCard(render, 'queen', { targetDecreeCode: button.dataset.decreeCode || '' });
+    });
   });
 
   document.querySelector('[data-act="confirmGamePrompt"]')?.addEventListener('click', async () => {

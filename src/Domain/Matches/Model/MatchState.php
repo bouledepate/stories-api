@@ -11,6 +11,7 @@ final class MatchState
 {
     /**
      * @param list<MatchPlayer> $players
+     * @param list<ActiveDecree> $activeDecrees
      */
     public function __construct(
         public string $id,
@@ -24,6 +25,7 @@ final class MatchState
         public ?RoundSummary $lastRoundSummary,
         public string $createdAt,
         public string $updatedAt,
+        public array $activeDecrees = [],
     ) {
     }
 
@@ -39,6 +41,12 @@ final class MatchState
         }
 
         $currentRound = $state['currentRound'] ?? null;
+        $activeDecrees = [];
+        foreach ((array) ($state['activeDecrees'] ?? []) as $decreeData) {
+            if (is_array($decreeData)) {
+                $activeDecrees[] = ActiveDecree::fromArray($decreeData);
+            }
+        }
 
         return new self(
             (string) ($state['id'] ?? ''),
@@ -54,6 +62,7 @@ final class MatchState
                 : null,
             (string) ($state['createdAt'] ?? gmdate(DATE_ATOM)),
             (string) ($state['updatedAt'] ?? gmdate(DATE_ATOM)),
+            $activeDecrees,
         );
     }
 
@@ -97,6 +106,49 @@ final class MatchState
         $this->updatedAt = gmdate(DATE_ATOM);
     }
 
+    public function activeDecreeForCard(string $cardCode, ?RoundState $round = null): ?ActiveDecree
+    {
+        foreach ($this->activeDecrees as $decree) {
+            if (!$decree instanceof ActiveDecree || $decree->cardCode !== $cardCode) {
+                continue;
+            }
+
+            if ($round instanceof RoundState && $round->isDecreeSuppressed($decree->code)) {
+                continue;
+            }
+
+            return $decree;
+        }
+
+        return null;
+    }
+
+    public function firstUnsuppressedDecree(?RoundState $round = null): ?ActiveDecree
+    {
+        return $this->unsuppressedDecrees($round)[0] ?? null;
+    }
+
+    /**
+     * @return list<ActiveDecree>
+     */
+    public function unsuppressedDecrees(?RoundState $round = null): array
+    {
+        $decrees = [];
+        foreach ($this->activeDecrees as $decree) {
+            if (!$decree instanceof ActiveDecree) {
+                continue;
+            }
+
+            if ($round instanceof RoundState && $round->isDecreeSuppressed($decree->code)) {
+                continue;
+            }
+
+            $decrees[] = $decree;
+        }
+
+        return $decrees;
+    }
+
     /** @return list<string> */
     public function orderedPlayerIds(): array
     {
@@ -116,6 +168,7 @@ final class MatchState
             'winnerUserId' => $this->winnerUserId,
             'currentRound' => $this->currentRound?->toArray(),
             'lastRoundSummary' => $this->lastRoundSummary?->toArray(),
+            'activeDecrees' => array_map(static fn (ActiveDecree $decree): array => $decree->toArray(), $this->activeDecrees),
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
         ];

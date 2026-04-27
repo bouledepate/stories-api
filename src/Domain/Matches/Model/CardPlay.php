@@ -15,6 +15,7 @@ final class CardPlay
         public readonly ?string $secondTargetUserId = null,
         public readonly ?bool $shouldReact = null,
         public readonly ?bool $shouldSwap = null,
+        public readonly ?string $targetDecreeCode = null,
     ) {
     }
 }

@@ -42,6 +42,7 @@ final class PlayCardHandler
             $request->secondTargetUserId,
             $request->shouldReact,
             $request->shouldSwap,
+            $request->targetDecreeCode,
         ));
         $this->matches->save($updated);
 

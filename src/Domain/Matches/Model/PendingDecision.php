@@ -19,6 +19,7 @@ final class PendingDecision
         public ?string $guessedCardCode = null,
         public ?string $guessedCardName = null,
         public bool $canReact = false,
+        public array $availableDecrees = [],
     ) {
     }
 
@@ -50,6 +51,7 @@ final class PendingDecision
             isset($data['guessedCardCode']) ? (string) $data['guessedCardCode'] : null,
             isset($data['guessedCardName']) ? (string) $data['guessedCardName'] : null,
             (bool) ($data['canReact'] ?? false),
+            array_values(array_filter((array) ($data['availableDecrees'] ?? []), 'is_array')),
         );
     }
 
@@ -69,6 +71,7 @@ final class PendingDecision
             'guessedCardCode' => $this->guessedCardCode,
             'guessedCardName' => $this->guessedCardName,
             'canReact' => $this->canReact,
+            'availableDecrees' => $this->availableDecrees,
         ];
     }
 }

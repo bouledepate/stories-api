@@ -68,9 +68,12 @@ const buildVisibleCardCounts = () => {
 
 const availableGuardGuessCards = () => {
   const visibleCounts = buildVisibleCardCounts();
+  const freeInterrogationActive = (getCurrentRound()?.activeDecrees || []).some(
+    (decree) => decree?.code === 'free_interrogation' && !decree?.suppressedByQueen
+  );
 
   return matchCardCatalog.filter((card) => {
-    if (card.code === 'guard') return false;
+    if (card.code === 'guard' && !freeInterrogationActive) return false;
     return Number(visibleCounts.get(card.code) || 0) < Number(card.copies || 0);
   });
 };
@@ -94,6 +97,31 @@ const formatEventLine = (event) => {
       actor: highlightName(actorName),
       target: highlightName(targetName),
       card: highlightCard(event.guessedCardName || event.guessedCardCode || 'card'),
+    });
+  }
+  if (event.type === 'decree_guard_guess_hit') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    const targetName = resolvePlayerName(event.targetUserId);
+    return t('decreeGuardHitEvent', {
+      actor: highlightName(actorName),
+      target: highlightName(targetName),
+      card: highlightCard(event.guessedCardName || event.guessedCardCode || 'card'),
+    });
+  }
+  if (event.type === 'decree_guard_guess_miss') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    const targetName = resolvePlayerName(event.targetUserId);
+    return t('decreeGuardMissEvent', {
+      actor: highlightName(actorName),
+      target: highlightName(targetName),
+      card: highlightCard(event.guessedCardName || event.guessedCardCode || 'card'),
+    });
+  }
+  if (event.type === 'decree_no_target') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    return t('decreeNoTargetEvent', {
+      actor: highlightName(actorName),
+      card: highlightCard(event.cardName || event.cardCode || 'card'),
     });
   }
   if (event.type === 'guard_guess_miss') {
@@ -195,6 +223,14 @@ const formatEventLine = (event) => {
     return t('queenNoDecreeEvent', {
       actor: highlightName(actorName),
       card: highlightCard('Королева'),
+    });
+  }
+  if (event.type === 'queen_decree_suppressed') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    return t('queenDecreeSuppressedEvent', {
+      actor: highlightName(actorName),
+      card: highlightCard('Королева'),
+      decree: highlightCard(event.targetCardName || event.targetCardCode || 'decree'),
     });
   }
   if (event.type === 'king_discard_elimination') {
@@ -309,6 +345,26 @@ const renderEventLog = () => {
       <h4>${t('gameEvents')}</h4>
       <div class="game-events">
         ${ordered.length ? ordered.map((event) => `<div class="game-event-line ${event.type === 'system' || event.type === 'round_summary' ? 'system' : ''}">${formatEventLine(event)}</div>`).join('') : `<div class="game-muted">${t('gameNoEvents')}</div>`}
+      </div>
+    </div>
+  `;
+};
+
+const renderActiveDecrees = () => {
+  const decrees = Array.isArray(getCurrentRound()?.activeDecrees)
+    ? getCurrentRound().activeDecrees
+    : (Array.isArray(state.activeMatch?.activeDecrees) ? state.activeMatch.activeDecrees : []);
+
+  return `
+    <div class="game-card">
+      <h4>${t('activeDecrees')}</h4>
+      <div class="game-decrees">
+        ${decrees.length ? decrees.map((decree) => `
+          <div class="game-decree ${decree.suppressedByQueen ? 'suppressed' : ''}">
+            <strong>${highlightCard(decree.title || decree.code)}</strong>
+            <span>${esc(decree.effectText || '')}</span>
+          </div>
+        `).join('') : `<div class="game-muted">${t('noActiveDecrees')}</div>`}
       </div>
     </div>
   `;
@@ -515,6 +571,34 @@ const renderPendingDecisionPrompt = () => {
             <div class="row">
               <button class="primary" data-act="resolveGuardMiss">${t('guardResolutionConfirm')}</button>
             </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (pendingDecision.type === 'queen_decree_suppression') {
+    const decrees = Array.isArray(pendingDecision.availableDecrees) ? pendingDecision.availableDecrees : [];
+
+    return `
+      <div class="game-card-play-prompt-shell">
+        <div class="game-card-play-prompt">
+          <div class="game-card-play-prompt-head">
+            <div>
+              <h3>${t('queenDecreePromptTitle')}</h3>
+              <p>${t('queenDecreePromptHint')}</p>
+            </div>
+          </div>
+          <div class="game-card-play-prompt-grid">
+            ${decrees.map((decree) => `
+              <button class="game-prompt-option" data-act="confirmQueenDecreeSuppression" data-decree-code="${esc(decree.code || '')}">
+                <strong>${esc(decree.title || decree.code || '')}</strong>
+                <span>${esc(decree.effectText || '')}</span>
+              </button>
+            `).join('')}
+          </div>
+          <div class="game-card-play-prompt-footer">
+            <div class="game-card-play-prompt-summary">${t('queenDecreePromptSummary')}</div>
           </div>
         </div>
       </div>
@@ -758,6 +842,7 @@ export const renderGameScreen = () => {
       </main>
       <aside class="game-sidebar">
         ${renderLeaderboard()}
+        ${renderActiveDecrees()}
         ${renderEventLog()}
       </aside>
       ${renderChatWidget()}

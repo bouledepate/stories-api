@@ -16,6 +16,8 @@ use Stories\Application\Rooms\GetRoomMatch\GetRoomMatchHandler;
 use Stories\Application\Rooms\LeaveRoom\LeaveRoomHandler;
 use Stories\Application\Rooms\Support\RoomUseCaseSupport;
 use Stories\Domain\Matches\Card\CharacterCardRegistry;
+use Stories\Domain\Matches\Decree\DecreeRegistry;
+use Stories\Domain\Matches\Model\ActiveDecree;
 use Stories\Domain\Matches\Model\Card;
 use Stories\Domain\Matches\Model\CardPlay;
 use Stories\Domain\Matches\Model\MatchPlayer;
@@ -58,7 +60,7 @@ final class MatchLifecycleTest extends TestCase
         $formatter = new MatchViewFormatter();
         $engine = $this->createEngine();
 
-        $create = new CreateMatchHandler($matches, $rooms, new DbalRoomParticipantsRepository($db), $playersProvider, $formatter);
+        $create = new CreateMatchHandler($matches, $rooms, new DbalRoomParticipantsRepository($db), $playersProvider, $formatter, new DecreeRegistry());
         $start = new StartRoundHandler($matches, $rooms, $playersProvider, $engine, $formatter);
         $play = new PlayCardHandler($matches, $engine, $formatter);
         $state = new GetMatchStateHandler($matches, $formatter);
@@ -122,7 +124,7 @@ final class MatchLifecycleTest extends TestCase
         $formatter = new MatchViewFormatter();
         $engine = $this->createEngine();
 
-        $create = new CreateMatchHandler($matches, $rooms, new DbalRoomParticipantsRepository($db), $playersProvider, $formatter);
+        $create = new CreateMatchHandler($matches, $rooms, new DbalRoomParticipantsRepository($db), $playersProvider, $formatter, new DecreeRegistry());
         $start = new StartRoundHandler($matches, $rooms, $playersProvider, $engine, $formatter);
         $play = new PlayCardHandler($matches, $engine, $formatter);
 
@@ -160,7 +162,7 @@ final class MatchLifecycleTest extends TestCase
         $formatter = new MatchViewFormatter();
         $engine = $this->createEngine();
 
-        $create = new CreateMatchHandler($matches, $rooms, $participants, $playersProvider, $formatter);
+        $create = new CreateMatchHandler($matches, $rooms, $participants, $playersProvider, $formatter, new DecreeRegistry());
         $start = new StartRoundHandler($matches, $rooms, $playersProvider, $engine, $formatter);
         $leave = new LeaveRoomHandler($rooms, $participants, $matches, $engine, $support);
 
@@ -207,7 +209,7 @@ final class MatchLifecycleTest extends TestCase
         $formatter = new MatchViewFormatter();
         $engine = $this->createEngine();
 
-        $create = new CreateMatchHandler($matches, $rooms, $participants, $playersProvider, $formatter);
+        $create = new CreateMatchHandler($matches, $rooms, $participants, $playersProvider, $formatter, new DecreeRegistry());
         $start = new StartRoundHandler($matches, $rooms, $playersProvider, $engine, $formatter);
         $leave = new LeaveRoomHandler($rooms, $participants, $matches, $engine, $support);
         $getRoomMatch = new GetRoomMatchHandler($rooms, $participants, $matches, $formatter);
@@ -465,6 +467,120 @@ final class MatchLifecycleTest extends TestCase
 
         try {
             $engine->playCard($match, new CardPlay('u1', 'guard', 'u2', 'guard', 'guard-u1'));
+            self::fail('Expected ApiException was not thrown');
+        } catch (ApiException $exception) {
+            self::assertSame(ApiErrorCode::GUARD_CANNOT_GUESS_GUARD, $exception->errorCode);
+        }
+    }
+
+    public function testFreeInterrogationDecreeAllowsGuardGuessingGuard(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+
+        $match = new MatchState(
+            id: 'match-free-interrogation',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('queen', 'Королева', 8, 'queen-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('guard', 'Стражник', 1, 'guard-u1'),
+                        new Card('scout', 'Разведчик', 2, 'scout-u1'),
+                    ], []),
+                    'u2' => new RoundPlayerState(false, [new Card('guard', 'Стражник', 1, 'guard-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'scout', 'Разведчик', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+            activeDecrees: [
+                new ActiveDecree(
+                    'free_interrogation',
+                    'Свободный допрос',
+                    'guard',
+                    'Выберите игрока и назовите карту (включая Стражника). Если карта угадана, игрок выбывает из раунда.',
+                ),
+            ],
+        );
+
+        $updated = $engine->playCard($match, new CardPlay('u1', 'guard', 'u2', 'guard', 'guard-u1'));
+
+        self::assertSame('decree_guard_guess_hit', $updated->currentRound?->lastAction?->type);
+        self::assertTrue($updated->currentRound?->getPlayerState('u2')->eliminated ?? false);
+        self::assertSame(RoundStatus::FINISHED, $updated->currentRound?->status);
+        self::assertSame(['u1'], $updated->currentRound?->roundWinners);
+    }
+
+    public function testQueenSuppressesActiveDecreeUntilEndOfRound(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+
+        $match = new MatchState(
+            id: 'match-queen-suppresses-decree',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('bishop', 'Епископ', 7, 'bishop-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('queen', 'Королева', 8, 'queen-u1'),
+                        new Card('scout', 'Разведчик', 2, 'scout-u1'),
+                    ], []),
+                    'u2' => new RoundPlayerState(false, [new Card('guard', 'Стражник', 1, 'guard-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'scout', 'Разведчик', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+            activeDecrees: [
+                new ActiveDecree(
+                    'free_interrogation',
+                    'Свободный допрос',
+                    'guard',
+                    'Выберите игрока и назовите карту (включая Стражника). Если карта угадана, игрок выбывает из раунда.',
+                ),
+            ],
+        );
+
+        $afterQueen = $engine->playCard($match, new CardPlay('u1', 'queen', cardInstanceId: 'queen-u1'));
+
+        self::assertSame('queen_decree_suppressed', $afterQueen->currentRound?->lastAction?->type);
+        self::assertTrue($afterQueen->currentRound?->isDecreeSuppressed('free_interrogation'));
+        self::assertSame('u2', $afterQueen->currentRound?->activePlayerId);
+
+        try {
+            $engine->playCard($afterQueen, new CardPlay('u2', 'guard', 'u1', 'guard', 'guard-u2'));
             self::fail('Expected ApiException was not thrown');
         } catch (ApiException $exception) {
             self::assertSame(ApiErrorCode::GUARD_CANNOT_GUESS_GUARD, $exception->errorCode);
@@ -1437,7 +1553,7 @@ final class MatchLifecycleTest extends TestCase
         $cards = new CharacterCardRegistry();
         $deckFactory = new CharacterDeckFactory($cards);
         $eliminations = new PlayerEliminationService();
-        $effectResolver = new CardEffectResolver($cards, $eliminations);
+        $effectResolver = new CardEffectResolver($cards, new DecreeRegistry(), $eliminations);
 
         return new MatchEngine(
             new RoundSetupFactory($deckFactory),

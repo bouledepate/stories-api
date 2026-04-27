@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Stories\Application\Matches\CreateMatch;
 
 use Stories\Application\Matches\Support\MatchViewFormatter;
+use Stories\Domain\Matches\Decree\DecreeRegistry;
 use Stories\Domain\Matches\Model\MatchPlayer;
 use Stories\Domain\Matches\Model\MatchState;
 use Stories\Domain\Matches\Model\MatchStatus;
@@ -24,6 +25,7 @@ final class CreateMatchHandler
         private readonly RoomParticipantsRepository $participants,
         private readonly RoomMatchPlayersProvider $playersProvider,
         private readonly MatchViewFormatter $formatter,
+        private readonly DecreeRegistry $decrees,
     ) {
     }
 
@@ -80,6 +82,10 @@ final class CreateMatchHandler
             lastRoundSummary: null,
             createdAt: gmdate(DATE_ATOM),
             updatedAt: gmdate(DATE_ATOM),
+            activeDecrees: array_map(
+                static fn ($decree) => $decree->activate(),
+                $this->decrees->openingSet(),
+            ),
         );
 
         $this->matches->create($match);
