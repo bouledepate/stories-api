@@ -65,6 +65,7 @@ final class FeudalLordCard extends AbstractCharacterCard
         $context->round->pendingDecision = new PendingDecision(
             'feudal_lord_swap',
             $context->play->actorUserId,
+            $context->play->actorUserId,
             $context->playedCard->code,
             $context->playedCard->name,
             $targetUserId,

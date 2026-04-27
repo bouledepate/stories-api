@@ -34,19 +34,33 @@ final class MatchEngine
     {
         $round = $this->requireActiveRound($match);
         if ($round->hasPendingDecision()) {
-            return $this->finalizeRoundProgress(
-                $match,
-                $round,
-                $play->actorUserId,
-                fn () => $this->turnResolver->resolvePendingDecision($round, $play),
-            );
+            $advanceFromUserId = $this->turnResolver->resolvePendingDecision($round, $play);
+            if ($round->hasPendingDecision()) {
+                return $this->completeRoundState($match, $round);
+            }
+
+            if ($round->activePlayersCount() <= 1) {
+                $this->roundFinisher->finishRound($match, $round);
+
+                return $match;
+            }
+
+            $this->turnResolver->advanceAfterAction($match, $round, $advanceFromUserId);
+            if ($round->lastAction?->type === 'peasant_reaction_safe') {
+                $match->currentRound = $round;
+                $match->markUpdated();
+
+                return $match;
+            }
+
+            return $this->completeRoundState($match, $round);
         }
 
         return $this->finalizeRoundProgress(
             $match,
             $round,
-            $play->actorUserId,
             fn () => $this->turnResolver->resolveCardPlay($match, $round, $play),
+            fn () => $play->actorUserId,
         );
     }
 
@@ -74,8 +88,8 @@ final class MatchEngine
             return $this->finalizeRoundProgress(
                 $match,
                 $round,
-                $userId,
                 fn () => $this->turnResolver->resolveLeaveOnTurn($round, $userId),
+                fn () => $userId,
             );
         }
 
@@ -136,12 +150,13 @@ final class MatchEngine
 
     /**
      * @param callable():void $applyAction
+     * @param callable():string $advanceFromUserId
      */
     private function finalizeRoundProgress(
         MatchState $match,
         RoundState $round,
-        string $actorUserId,
         callable $applyAction,
+        callable $advanceFromUserId,
     ): MatchState {
         $applyAction();
 
@@ -155,7 +170,7 @@ final class MatchEngine
             return $match;
         }
 
-        $this->turnResolver->advanceAfterAction($match, $round, $actorUserId);
+        $this->turnResolver->advanceAfterAction($match, $round, $advanceFromUserId());
 
         return $this->completeRoundState($match, $round);
     }

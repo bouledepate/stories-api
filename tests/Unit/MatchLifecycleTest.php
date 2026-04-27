@@ -77,6 +77,8 @@ final class MatchLifecycleTest extends TestCase
 
         $round = (array) $started['currentRound'];
         self::assertCount(3, (array) ($round['revealedCards'] ?? []));
+        self::assertTrue((bool) ($round['hasSetAsideCard'] ?? false));
+        self::assertArrayNotHasKey('setAsideCard', $round);
         $activePlayerId = (string) ($round['activePlayerId'] ?? '');
         self::assertContains($activePlayerId, ['u1', 'u2']);
         $actor = $activePlayerId === 'u1' ? $owner : $second;
@@ -90,6 +92,8 @@ final class MatchLifecycleTest extends TestCase
         $playRequest = match ($firstCardCode) {
             'guard' => new PlayCardRequest($firstCardCode, $viewer->id, 'king'),
             'scout', 'executioner' => new PlayCardRequest($firstCardCode, $viewer->id),
+            'rebel' => new PlayCardRequest($firstCardCode, $viewer->id),
+            'feudal_lord' => new PlayCardRequest($firstCardCode, $actor->id, null, null, $viewer->id, false),
             default => new PlayCardRequest($firstCardCode),
         };
 
@@ -361,7 +365,7 @@ final class MatchLifecycleTest extends TestCase
         self::assertCount(1, $updated->currentRound?->getPlayerState('u2')->discard ?? []);
     }
 
-    public function testGuardGuessMissKeepsTargetInRoundAndPassesTurn(): void
+    public function testGuardGuessMissWithoutPeasantUsesHiddenResolutionThenPassesTurn(): void
     {
         $engine = $this->createEngine();
         $now = gmdate(DATE_ATOM);
@@ -404,9 +408,21 @@ final class MatchLifecycleTest extends TestCase
         self::assertSame('active', $updated->status->value);
         self::assertSame('active', $updated->currentRound?->status->value);
         self::assertSame('guard_guess_miss', $updated->currentRound?->lastAction?->type);
-        self::assertSame('u2', $updated->currentRound?->activePlayerId);
+        self::assertSame('u1', $updated->currentRound?->activePlayerId);
+        self::assertNotNull($updated->currentRound?->pendingDecision);
+        self::assertSame('guard_miss_peasant_reaction', $updated->currentRound?->pendingDecision?->type);
+        self::assertFalse($updated->currentRound?->pendingDecision?->canReact ?? true);
+        self::assertSame('u2', $updated->currentRound?->pendingDecision?->actorUserId);
         self::assertFalse($updated->currentRound?->getPlayerState('u2')->eliminated);
-        self::assertCount(2, $updated->currentRound?->getPlayerState('u2')->hand ?? []);
+
+        $resolved = $engine->playCard($updated, new CardPlay('u2', 'peasant', shouldReact: false));
+
+        self::assertSame('active', $resolved->currentRound?->status->value);
+        self::assertSame('guard_miss_resolved', $resolved->currentRound?->lastAction?->type);
+        self::assertNull($resolved->currentRound?->pendingDecision);
+        self::assertSame('u2', $resolved->currentRound?->activePlayerId);
+        self::assertFalse($resolved->currentRound?->getPlayerState('u2')->eliminated);
+        self::assertCount(2, $resolved->currentRound?->getPlayerState('u2')->hand ?? []);
     }
 
     public function testGuardCannotGuessGuard(): void
@@ -453,6 +469,208 @@ final class MatchLifecycleTest extends TestCase
         } catch (ApiException $exception) {
             self::assertSame(ApiErrorCode::GUARD_CANNOT_GUESS_GUARD, $exception->errorCode);
         }
+    }
+
+    public function testGuardGuessMissWithPeasantCanReactAndSurvive(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+
+        $match = new MatchState(
+            id: 'match-guard-peasant-safe',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('queen', 'Королева', 8, 'queen-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('guard', 'Стражник', 1, 'guard-u1'),
+                        new Card('scout', 'Разведчик', 2, 'scout-u1'),
+                    ], []),
+                    'u2' => new RoundPlayerState(false, [new Card('peasant', 'Крестьянин', 0, 'peasant-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'scout', 'Разведчик', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+        );
+
+        $pending = $engine->playCard($match, new CardPlay('u1', 'guard', 'u2', 'king', 'guard-u1'));
+
+        self::assertSame('guard_guess_miss', $pending->currentRound?->lastAction?->type);
+        self::assertTrue($pending->currentRound?->pendingDecision?->canReact ?? false);
+
+        $resolved = $engine->playCard($pending, new CardPlay('u2', 'peasant', cardInstanceId: 'peasant-u2', shouldReact: true));
+
+        self::assertSame('peasant_reaction_safe', $resolved->currentRound?->lastAction?->type);
+        self::assertNull($resolved->currentRound?->pendingDecision);
+        self::assertSame('u2', $resolved->currentRound?->activePlayerId);
+        self::assertFalse($resolved->currentRound?->getPlayerState('u2')->eliminated);
+        self::assertCount(1, $resolved->currentRound?->getPlayerState('u2')->discard ?? []);
+        self::assertSame('peasant', $resolved->currentRound?->getPlayerState('u2')->discard[0]->code ?? null);
+        self::assertSame('queen', $resolved->currentRound?->getPlayerState('u2')->peekFirstCardInHand()?->code);
+    }
+
+    public function testGuardGuessMissWithPeasantSkipDoesNotRevealPeasant(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+
+        $match = new MatchState(
+            id: 'match-guard-peasant-skip',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('queen', 'Королева', 8, 'queen-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('guard', 'Стражник', 1, 'guard-u1'),
+                        new Card('scout', 'Разведчик', 2, 'scout-u1'),
+                    ], []),
+                    'u2' => new RoundPlayerState(false, [new Card('peasant', 'Крестьянин', 0, 'peasant-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'scout', 'Разведчик', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+        );
+
+        $pending = $engine->playCard($match, new CardPlay('u1', 'guard', 'u2', 'king', 'guard-u1'));
+        $resolved = $engine->playCard($pending, new CardPlay('u2', 'peasant', shouldReact: false));
+
+        self::assertSame('guard_miss_resolved', $resolved->currentRound?->lastAction?->type);
+        self::assertNull($resolved->currentRound?->pendingDecision);
+        self::assertSame('u2', $resolved->currentRound?->activePlayerId);
+        self::assertFalse($resolved->currentRound?->getPlayerState('u2')->eliminated);
+        self::assertCount(2, $resolved->currentRound?->getPlayerState('u2')->hand ?? []);
+        self::assertSame('peasant', $resolved->currentRound?->getPlayerState('u2')->hand[0]->code ?? null);
+        self::assertSame('queen', $resolved->currentRound?->getPlayerState('u2')->hand[1]->code ?? null);
+        self::assertCount(0, $resolved->currentRound?->getPlayerState('u2')->discard ?? []);
+    }
+
+    public function testGuardGuessMissWithPeasantCanReactAndBeEliminated(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+
+        $match = new MatchState(
+            id: 'match-guard-peasant-death',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('queen', 'Королева', 8, 'queen-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('guard', 'Стражник', 1, 'guard-u1'),
+                        new Card('scout', 'Разведчик', 2, 'scout-u1'),
+                    ], []),
+                    'u2' => new RoundPlayerState(false, [new Card('peasant', 'Крестьянин', 0, 'peasant-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'scout', 'Разведчик', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+        );
+
+        $pending = $engine->playCard($match, new CardPlay('u1', 'guard', 'u2', 'queen', 'guard-u1'));
+        $resolved = $engine->playCard($pending, new CardPlay('u2', 'peasant', cardInstanceId: 'peasant-u2', shouldReact: true));
+
+        self::assertSame('peasant_reaction_eliminated', $resolved->currentRound?->lastAction?->type);
+        self::assertTrue($resolved->currentRound?->getPlayerState('u2')->eliminated ?? false);
+        self::assertSame(RoundStatus::FINISHED, $resolved->currentRound?->status);
+        self::assertSame(['u1'], $resolved->currentRound?->roundWinners);
+        self::assertCount(2, $resolved->currentRound?->getPlayerState('u2')->discard ?? []);
+        self::assertSame('peasant', $resolved->currentRound?->getPlayerState('u2')->discard[0]->code ?? null);
+        self::assertSame('queen', $resolved->currentRound?->getPlayerState('u2')->discard[1]->code ?? null);
+    }
+
+    public function testPeasantCanBePlayedOnOwnTurnWithoutEffect(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+
+        $match = new MatchState(
+            id: 'match-peasant-regular-play',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('bishop', 'Епископ', 7, 'bishop-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('peasant', 'Крестьянин', 0, 'peasant-u1'),
+                        new Card('queen', 'Королева', 8, 'queen-u1'),
+                    ], []),
+                    'u2' => new RoundPlayerState(false, [new Card('guard', 'Стражник', 1, 'guard-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'guard', 'Стражник', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+        );
+
+        $updated = $engine->playCard($match, new CardPlay('u1', 'peasant', cardInstanceId: 'peasant-u1'));
+
+        self::assertSame('card_played', $updated->currentRound?->lastAction?->type);
+        self::assertSame('u2', $updated->currentRound?->activePlayerId);
+        self::assertCount(1, $updated->currentRound?->getPlayerState('u1')->discard ?? []);
+        self::assertSame('peasant', $updated->currentRound?->getPlayerState('u1')->discard[0]->code ?? null);
+        self::assertSame('queen', $updated->currentRound?->getPlayerState('u1')->peekFirstCardInHand()?->code);
     }
 
     public function testScoutBlocksCurrentCardUntilTargetsNextTurn(): void
@@ -895,7 +1113,7 @@ final class MatchLifecycleTest extends TestCase
         self::assertSame('guard', $pending->currentRound?->pendingDecision?->targetCard->code);
         self::assertSame('king', $pending->currentRound?->pendingDecision?->secondTargetCard->code);
 
-        $resolved = $engine->playCard($pending, new CardPlay('u1', 'feudal_lord', null, null, null, null, true));
+        $resolved = $engine->playCard($pending, new CardPlay('u1', 'feudal_lord', null, null, null, null, null, true));
 
         self::assertNull($resolved->currentRound?->pendingDecision);
         self::assertSame('feudal_swap', $resolved->currentRound?->lastAction?->type);
@@ -1002,6 +1220,12 @@ final class MatchLifecycleTest extends TestCase
         self::assertSame('king', $afterRebel->currentRound?->getPlayerState('u1')->peekFirstCardInHand()?->code);
         self::assertCount(1, $afterRebel->currentRound?->getPlayerState('u1')->discard ?? []);
         self::assertSame('bishop', $afterRebel->currentRound?->getPlayerState('u1')->discard[0]->code ?? null);
+
+        $view = (new MatchViewFormatter())->format($afterRebel, 'u2');
+        $lastAction = (array) (($view['currentRound'] ?? [])['lastAction'] ?? []);
+        self::assertArrayHasKey('targetCardCode', $lastAction);
+        self::assertNull($lastAction['targetCardCode'] ?? null);
+        self::assertNull($lastAction['targetCardName'] ?? null);
     }
 
     public function testBlackRoseDoesNotPreventSelfDiscard(): void
@@ -1044,12 +1268,153 @@ final class MatchLifecycleTest extends TestCase
 
         $updated = $engine->playCard($match, new CardPlay('u1', 'rebel', 'u1', null, 'rebel-u1'));
 
-        self::assertSame('rebel_redraw', $updated->currentRound?->lastAction?->type);
-        self::assertTrue($updated->currentRound?->getPlayerState('u1')->hasBlackRoseToken);
+        self::assertSame('king_discard_elimination', $updated->currentRound?->lastAction?->type);
+        self::assertFalse($updated->currentRound?->getPlayerState('u1')->hasBlackRoseToken);
+        self::assertTrue($updated->currentRound?->getPlayerState('u1')->eliminated ?? false);
+        self::assertSame(RoundStatus::FINISHED, $updated->currentRound?->status);
+        self::assertSame(['u2'], $updated->currentRound?->roundWinners);
         self::assertCount(3, $updated->currentRound?->getPlayerState('u1')->discard ?? []);
         self::assertSame('bishop', $updated->currentRound?->getPlayerState('u1')->discard[0]->code ?? null);
         self::assertSame('rebel', $updated->currentRound?->getPlayerState('u1')->discard[1]->code ?? null);
         self::assertSame('king', $updated->currentRound?->getPlayerState('u1')->discard[2]->code ?? null);
+    }
+
+    public function testQueenIsDiscardedWithoutEffectWhenNoDecreesExist(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+
+        $match = new MatchState(
+            id: 'match-queen-no-decree',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('guard', 'Стражник', 1, 'guard-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [new Card('queen', 'Королева', 8, 'queen-u1')], []),
+                    'u2' => new RoundPlayerState(false, [new Card('bishop', 'Епископ', 7, 'bishop-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'bishop', 'Епископ', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+        );
+
+        $updated = $engine->playCard($match, new CardPlay('u1', 'queen', null, null, 'queen-u1'));
+
+        self::assertSame('queen_no_decree', $updated->currentRound?->lastAction?->type);
+        self::assertSame('u2', $updated->currentRound?->activePlayerId);
+        self::assertCount(1, $updated->currentRound?->getPlayerState('u1')->discard ?? []);
+        self::assertSame('queen', $updated->currentRound?->getPlayerState('u1')->discard[0]->code ?? null);
+    }
+
+    public function testKingDiscardEliminatesActorWhenPlayedVoluntarily(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+
+        $match = new MatchState(
+            id: 'match-king-self-discard',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('guard', 'Стражник', 1, 'guard-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('king', 'Король', 9, 'king-u1'),
+                        new Card('bishop', 'Епископ', 7, 'bishop-u1'),
+                    ], []),
+                    'u2' => new RoundPlayerState(false, [new Card('guard', 'Стражник', 1, 'guard-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'guard', 'Стражник', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+        );
+
+        $updated = $engine->playCard($match, new CardPlay('u1', 'king', null, null, 'king-u1'));
+
+        self::assertSame('king_discard_elimination', $updated->currentRound?->lastAction?->type);
+        self::assertTrue($updated->currentRound?->getPlayerState('u1')->eliminated ?? false);
+        self::assertSame(RoundStatus::FINISHED, $updated->currentRound?->status);
+        self::assertSame(['u2'], $updated->currentRound?->roundWinners);
+        self::assertCount(2, $updated->currentRound?->getPlayerState('u1')->discard ?? []);
+        self::assertSame('king', $updated->currentRound?->getPlayerState('u1')->discard[0]->code ?? null);
+        self::assertSame('bishop', $updated->currentRound?->getPlayerState('u1')->discard[1]->code ?? null);
+    }
+
+    public function testRebelForcesKingDiscardAndEliminatesTarget(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+
+        $match = new MatchState(
+            id: 'match-rebel-king-discard',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('guard', 'Стражник', 1, 'guard-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [new Card('rebel', 'Мятежник', 5, 'rebel-u1')], []),
+                    'u2' => new RoundPlayerState(false, [new Card('king', 'Король', 9, 'king-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'guard', 'Стражник', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+        );
+
+        $updated = $engine->playCard($match, new CardPlay('u1', 'rebel', 'u2', null, 'rebel-u1'));
+
+        self::assertSame('king_discard_elimination', $updated->currentRound?->lastAction?->type);
+        self::assertTrue($updated->currentRound?->getPlayerState('u2')->eliminated ?? false);
+        self::assertSame(RoundStatus::FINISHED, $updated->currentRound?->status);
+        self::assertSame(['u1'], $updated->currentRound?->roundWinners);
+        self::assertCount(1, $updated->currentRound?->getPlayerState('u2')->discard ?? []);
+        self::assertSame('king', $updated->currentRound?->getPlayerState('u2')->discard[0]->code ?? null);
+        self::assertSame([], $updated->currentRound?->getPlayerState('u2')->hand ?? []);
     }
 
     /**

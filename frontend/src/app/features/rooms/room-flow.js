@@ -592,6 +592,13 @@ const bindRoomManageEvents = (render) => {
     const text = safeTextValue('#roomChatInput', 512);
     if (!state.activeRoom?.roomId || text === '') return;
     setRoomChatInputShouldFocus(true);
+    appendRoomChatMessage({
+      username: state.user?.username || 'user',
+      role: (state.activeRoom.participants || []).find((participant) => participant.userId === state.user?.id)?.role || 'player',
+      userId: state.user?.id || null,
+      text,
+      timestamp: Date.now(),
+    });
     sendSocketMessage({
       type: 'room_event',
       roomId: state.activeRoom.roomId,
@@ -607,6 +614,8 @@ const bindRoomManageEvents = (render) => {
       input.value = '';
       input.focus();
     }
+    render();
+    syncChatScroll();
   });
 
   document.querySelector('#roomChatInput')?.addEventListener('keydown', (event) => {

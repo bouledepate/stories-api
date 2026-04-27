@@ -30,5 +30,6 @@ final class PeasantCard extends AbstractCharacterCard
 
     public function resolve(CardEffectContext $context): void
     {
+        // Regular turn play is allowed, but the card has no standalone effect.
     }
 }

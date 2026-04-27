@@ -136,6 +136,10 @@ export const setGameCardPlayPrompt = (prompt) => {
   state.gameCardPlayPrompt = prompt || null;
 };
 
+export const setGameConfirmPrompt = (prompt) => {
+  state.gameConfirmPrompt = prompt || null;
+};
+
 export const patchGameCardPlayPrompt = (patch) => {
   if (!state.gameCardPlayPrompt) return;
   state.gameCardPlayPrompt = {

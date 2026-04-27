@@ -44,14 +44,15 @@ final class MatchViewFormatter
             $roundView = [
                 'status' => $round->status->value,
                 'activePlayerId' => $round->activePlayerId,
-                'setAsideCard' => $round->setAsideCard->toArray(),
+                'hasSetAsideCard' => true,
                 'revealedCards' => $this->cardsToArray($round->revealedCards),
                 'deckCount' => count($round->deck),
+                'hasPendingDecision' => $round->hasPendingDecision(),
                 'players' => $playersView,
                 'pendingDecision' => $round->pendingDecision?->actorUserId === $viewerUserId
                     ? $round->pendingDecision->toArray()
                     : null,
-                'lastAction' => $round->lastAction?->toArray(),
+                'lastAction' => $round->lastAction ? $this->formatLastAction($round->lastAction) : null,
                 'finishedReason' => $round->finishedReason?->value,
                 'roundWinners' => array_values($round->roundWinners),
             ];
@@ -101,5 +102,20 @@ final class MatchViewFormatter
         }
 
         return $names;
+    }
+
+    /**
+     * @return array<string,string|null>
+     */
+    private function formatLastAction(\Stories\Domain\Matches\Model\RoundAction $action): array
+    {
+        $payload = $action->toArray();
+
+        if ($action->type === 'black_rose_saved') {
+            $payload['targetCardCode'] = null;
+            $payload['targetCardName'] = null;
+        }
+
+        return $payload;
     }
 }

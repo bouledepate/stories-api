@@ -57,6 +57,17 @@ final class GuardCard extends AbstractCharacterCard
 
         if ($actionType === 'guard_guess_hit') {
             $context->eliminatePlayer($targetUserId);
+        } else {
+            $context->round->pendingDecision = new \Stories\Domain\Matches\Model\PendingDecision(
+                'guard_miss_peasant_reaction',
+                $targetUserId,
+                $context->play->actorUserId,
+                'peasant',
+                $context->resolveCardName('peasant'),
+                guessedCardCode: $guessedCardCode,
+                guessedCardName: $guessedCardName,
+                canReact: $context->targetState($targetUserId)->hasCard('peasant'),
+            );
         }
 
         $context->round->lastAction = new RoundAction(

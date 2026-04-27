@@ -14,6 +14,7 @@ import {
 import { sendSocketMessage, subscribeRoomSocket } from '../../services/socket';
 import {
   clearActiveRoomState,
+  pushRoomChatMessage,
   pushSystemRoomEvent,
   syncChatScroll,
 } from '../rooms/room-flow';
@@ -137,13 +138,24 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
 
       if (payload?.event === 'chat_message' && payload?.data?.text) {
         const isOwnMessage = Boolean(payload?.userId && state.user?.id && payload.userId === state.user.id);
-        pushRoomChatMessage({
-          username: payload?.data?.username || payload?.username || 'user',
-          role: payload?.data?.role || 'player',
-          userId: payload?.userId || null,
-          text: payload?.data?.text || '',
-          timestamp: payload?.timestamp,
-        });
+        const existingMessages = Array.isArray(state.roomChatMessages) ? state.roomChatMessages : [];
+        const lastMessage = existingMessages[existingMessages.length - 1] || null;
+        const isOwnEchoDuplicate = Boolean(
+          isOwnMessage
+          && lastMessage
+          && lastMessage.userId === payload?.userId
+          && lastMessage.text === (payload?.data?.text || '')
+          && Math.abs(Number(payload?.timestamp || 0) * 1000 - Number(lastMessage.timestamp || 0)) < 15000
+        );
+        if (!isOwnEchoDuplicate) {
+          pushRoomChatMessage({
+            username: payload?.data?.username || payload?.username || 'user',
+            role: payload?.data?.role || 'player',
+            userId: payload?.userId || null,
+            text: payload?.data?.text || '',
+            timestamp: payload?.timestamp,
+          });
+        }
         if (state.activeTab === 'roomManage' || state.activeTab === 'game') {
           render();
           if (state.activeTab === 'roomManage') {

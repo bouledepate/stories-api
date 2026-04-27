@@ -40,6 +40,7 @@ final class PlayCardHandler
             $request->guessedCardCode,
             $request->cardInstanceId,
             $request->secondTargetUserId,
+            $request->shouldReact,
             $request->shouldSwap,
         ));
         $this->matches->save($updated);

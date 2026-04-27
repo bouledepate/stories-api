@@ -9,12 +9,16 @@ final class PendingDecision
     public function __construct(
         public string $type,
         public string $actorUserId,
+        public string $originActorUserId,
         public string $cardCode,
         public string $cardName,
-        public string $targetUserId,
-        public string $secondTargetUserId,
-        public Card $targetCard,
-        public Card $secondTargetCard,
+        public ?string $targetUserId = null,
+        public ?string $secondTargetUserId = null,
+        public ?Card $targetCard = null,
+        public ?Card $secondTargetCard = null,
+        public ?string $guessedCardCode = null,
+        public ?string $guessedCardName = null,
+        public bool $canReact = false,
     ) {
     }
 
@@ -25,15 +29,10 @@ final class PendingDecision
             !isset(
                 $data['type'],
                 $data['actorUserId'],
+                $data['originActorUserId'],
                 $data['cardCode'],
                 $data['cardName'],
-                $data['targetUserId'],
-                $data['secondTargetUserId'],
-                $data['targetCard'],
-                $data['secondTargetCard'],
             )
-            || !is_array($data['targetCard'])
-            || !is_array($data['secondTargetCard'])
         ) {
             return null;
         }
@@ -41,12 +40,16 @@ final class PendingDecision
         return new self(
             (string) $data['type'],
             (string) $data['actorUserId'],
+            (string) $data['originActorUserId'],
             (string) $data['cardCode'],
             (string) $data['cardName'],
-            (string) $data['targetUserId'],
-            (string) $data['secondTargetUserId'],
-            Card::fromArray($data['targetCard']),
-            Card::fromArray($data['secondTargetCard']),
+            isset($data['targetUserId']) ? (string) $data['targetUserId'] : null,
+            isset($data['secondTargetUserId']) ? (string) $data['secondTargetUserId'] : null,
+            is_array($data['targetCard'] ?? null) ? Card::fromArray($data['targetCard']) : null,
+            is_array($data['secondTargetCard'] ?? null) ? Card::fromArray($data['secondTargetCard']) : null,
+            isset($data['guessedCardCode']) ? (string) $data['guessedCardCode'] : null,
+            isset($data['guessedCardName']) ? (string) $data['guessedCardName'] : null,
+            (bool) ($data['canReact'] ?? false),
         );
     }
 
@@ -56,12 +59,16 @@ final class PendingDecision
         return [
             'type' => $this->type,
             'actorUserId' => $this->actorUserId,
+            'originActorUserId' => $this->originActorUserId,
             'cardCode' => $this->cardCode,
             'cardName' => $this->cardName,
             'targetUserId' => $this->targetUserId,
             'secondTargetUserId' => $this->secondTargetUserId,
-            'targetCard' => $this->targetCard->toArray(),
-            'secondTargetCard' => $this->secondTargetCard->toArray(),
+            'targetCard' => $this->targetCard?->toArray(),
+            'secondTargetCard' => $this->secondTargetCard?->toArray(),
+            'guessedCardCode' => $this->guessedCardCode,
+            'guessedCardName' => $this->guessedCardName,
+            'canReact' => $this->canReact,
         ];
     }
 }

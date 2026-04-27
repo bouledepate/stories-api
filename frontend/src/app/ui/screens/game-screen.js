@@ -109,6 +109,33 @@ const formatEventLine = (event) => {
     const actorName = resolvePlayerName(event.actorUserId);
     return t('guardNoTargetEvent', {
       actor: highlightName(actorName),
+      card: highlightCard('Стражник'),
+    });
+  }
+  if (event.type === 'guard_miss_resolved') {
+    return t('guardMissResolvedEvent', {
+      card: highlightCard('Стражник'),
+    });
+  }
+  if (event.type === 'peasant_reaction_safe') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    return t('peasantReactionSafeEvent', {
+      actor: highlightName(actorName),
+      card: highlightCard('Крестьянин'),
+    });
+  }
+  if (event.type === 'peasant_reaction_eliminated') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    return t('peasantReactionEliminatedEvent', {
+      actor: highlightName(actorName),
+      card: highlightCard('Крестьянин'),
+    });
+  }
+  if (event.type === 'peasant_reaction_skipped') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    return t('peasantReactionSkippedEvent', {
+      actor: highlightName(actorName),
+      card: highlightCard('Крестьянин'),
     });
   }
   if (event.type === 'scout_lock_applied') {
@@ -123,6 +150,7 @@ const formatEventLine = (event) => {
     const actorName = resolvePlayerName(event.actorUserId);
     return t('scoutNoTargetEvent', {
       actor: highlightName(actorName),
+      card: highlightCard('Разведчик'),
     });
   }
   if (event.type === 'executioner_eliminate') {
@@ -145,18 +173,44 @@ const formatEventLine = (event) => {
     const actorName = resolvePlayerName(event.actorUserId);
     return t('executionerNoTargetEvent', {
       actor: highlightName(actorName),
+      card: highlightCard('Палач'),
     });
   }
   if (event.type === 'lady_protection_applied') {
     const actorName = resolvePlayerName(event.actorUserId);
     return t('ladyProtectionEvent', {
       actor: highlightName(actorName),
+      card: highlightCard('Дворянка'),
     });
   }
   if (event.type === 'bishop_token_applied') {
     const actorName = resolvePlayerName(event.actorUserId);
     return t('bishopTokenEvent', {
       actor: highlightName(actorName),
+      card: highlightCard('Епископ'),
+    });
+  }
+  if (event.type === 'queen_no_decree') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    return t('queenNoDecreeEvent', {
+      actor: highlightName(actorName),
+      card: highlightCard('Королева'),
+    });
+  }
+  if (event.type === 'king_discard_elimination') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    const targetName = resolvePlayerName(event.targetUserId);
+    if (event.actorUserId === event.targetUserId) {
+      return t('kingSelfEliminationEvent', {
+        actor: highlightName(actorName),
+        card: highlightCard('Король'),
+      });
+    }
+
+    return t('kingForcedEliminationEvent', {
+      actor: highlightName(actorName),
+      target: highlightName(targetName),
+      card: highlightCard(event.targetCardName || event.targetCardCode || 'card'),
     });
   }
   if (event.type === 'rebel_redraw') {
@@ -179,7 +233,10 @@ const formatEventLine = (event) => {
   }
   if (event.type === 'feudal_no_target') {
     const actorName = resolvePlayerName(event.actorUserId);
-    return t('feudalNoTargetEvent', { actor: highlightName(actorName) });
+    return t('feudalNoTargetEvent', {
+      actor: highlightName(actorName),
+      card: highlightCard('Феодал'),
+    });
   }
   if (event.type === 'feudal_inspect') {
     const actorName = resolvePlayerName(event.actorUserId);
@@ -187,6 +244,7 @@ const formatEventLine = (event) => {
     const secondTargetName = resolvePlayerName(event.secondTargetUserId);
     return t('feudalInspectEvent', {
       actor: highlightName(actorName),
+      card: highlightCard('Феодал'),
       firstTarget: highlightName(firstTargetName),
       secondTarget: highlightName(secondTargetName),
     });
@@ -197,6 +255,7 @@ const formatEventLine = (event) => {
     const secondTargetName = resolvePlayerName(event.secondTargetUserId);
     return t('feudalSwapEvent', {
       actor: highlightName(actorName),
+      card: highlightCard('Феодал'),
       firstTarget: highlightName(firstTargetName),
       secondTarget: highlightName(secondTargetName),
     });
@@ -207,6 +266,7 @@ const formatEventLine = (event) => {
     const secondTargetName = resolvePlayerName(event.secondTargetUserId);
     return t('feudalKeepEvent', {
       actor: highlightName(actorName),
+      card: highlightCard('Феодал'),
       firstTarget: highlightName(firstTargetName),
       secondTarget: highlightName(secondTargetName),
     });
@@ -305,6 +365,31 @@ const renderCardPreview = () => {
   `;
 };
 
+const renderGameConfirmPrompt = () => {
+  const prompt = state.gameConfirmPrompt;
+  if (!prompt) return '';
+
+  return `
+    <div class="game-card-play-prompt-shell game-confirm-prompt-shell">
+      <div class="game-card-play-prompt game-confirm-prompt">
+        <div class="game-card-play-prompt-head">
+          <div>
+            <h3>${esc(prompt.title || '')}</h3>
+            <p>${esc(prompt.message || '')}</p>
+          </div>
+          <button class="chip" data-act="closeGameConfirmPrompt" aria-label="${t('close')}">×</button>
+        </div>
+        <div class="game-card-play-prompt-footer">
+          <div class="row">
+            <button class="secondary" data-act="closeGameConfirmPrompt">${esc(prompt.cancelLabel || t('cancel'))}</button>
+            <button class="primary" data-act="confirmGamePrompt">${esc(prompt.confirmLabel || t('send'))}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+};
+
 const renderCardPlayPrompt = () => {
   const prompt = state.gameCardPlayPrompt;
   if (!prompt || (prompt.cardCode !== 'guard' && prompt.cardCode !== 'scout' && prompt.cardCode !== 'executioner' && prompt.cardCode !== 'rebel' && prompt.cardCode !== 'feudal_lord')) return '';
@@ -389,7 +474,54 @@ const renderCardPlayPrompt = () => {
 
 const renderPendingDecisionPrompt = () => {
   const pendingDecision = getCurrentRound()?.pendingDecision || null;
-  if (!pendingDecision || pendingDecision.type !== 'feudal_lord_swap') {
+  if (!pendingDecision) {
+    return '';
+  }
+
+  if (pendingDecision.type === 'guard_miss_peasant_reaction') {
+    if (pendingDecision.canReact) {
+      return `
+        <div class="game-card-play-prompt-shell">
+          <div class="game-card-play-prompt">
+            <div class="game-card-play-prompt-head">
+              <div>
+                <h3>${t('peasantReactionTitle')}</h3>
+                <p>${t('peasantReactionHint', { card: pendingDecision.guessedCardName || pendingDecision.guessedCardCode || 'card' })}</p>
+              </div>
+            </div>
+            <div class="game-card-play-prompt-footer">
+              <div class="game-card-play-prompt-summary">${t('peasantReactionSummary')}</div>
+              <div class="row">
+                <button class="secondary" data-act="skipPeasantReact">${t('peasantReactionSkip')}</button>
+                <button class="primary" data-act="confirmPeasantReact">${t('peasantReactionConfirm')}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="game-card-play-prompt-shell">
+        <div class="game-card-play-prompt">
+          <div class="game-card-play-prompt-head">
+            <div>
+              <h3>${t('guardResolutionTitle')}</h3>
+              <p>${t('guardResolutionHint')}</p>
+            </div>
+          </div>
+          <div class="game-card-play-prompt-footer">
+            <div class="game-card-play-prompt-summary">${t('guardResolutionSummary')}</div>
+            <div class="row">
+              <button class="primary" data-act="resolveGuardMiss">${t('guardResolutionConfirm')}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (pendingDecision.type !== 'feudal_lord_swap') {
     return '';
   }
 
@@ -595,11 +727,15 @@ export const renderGameScreen = () => {
   const winnerBanner = showRoundSummary
     ? t('roundWinnerSummary', { round: summary.roundNumber, winners: summary.winnerNames.join(', ') })
     : '';
+  const roundStatusBanner = state.gameStatusMessage
+    ? `<div class="game-summary-banner winner">${esc(state.gameStatusMessage)}</div>`
+    : (round?.hasPendingDecision ? `<div class="game-summary-banner">${esc(t('guardResolutionPending'))}</div>` : '');
 
   return `
     <section class="game-layout">
       <main class="game-table-wrap">
         ${winnerBanner ? `<div class="game-summary-banner round-summary-temp">${esc(winnerBanner)}</div>` : ''}
+        ${roundStatusBanner}
         <div class="game-table table-layout-${esc(String(totalPlayers))}">
           ${renderRevealedCardsRail()}
           <div class="game-center-stack">
@@ -627,6 +763,7 @@ export const renderGameScreen = () => {
       ${renderChatWidget()}
       ${renderMatchFinishPanel()}
       ${renderCardPreview()}
+      ${renderGameConfirmPrompt()}
       ${renderCardPlayPrompt()}
       ${renderPendingDecisionPrompt()}
     </section>

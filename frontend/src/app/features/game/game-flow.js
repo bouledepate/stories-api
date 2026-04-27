@@ -6,10 +6,12 @@ import { state } from '../../state';
 import { showApiError, showToast } from '../../services/feedback';
 import { emitLobbiesChanged, sendSocketMessage } from '../../services/socket';
 import {
+  appendRoomChatMessage,
   appendGameEventLog,
   clearActiveMatch,
   clearActiveRoom,
   setGameCardPlayPrompt,
+  setGameConfirmPrompt,
   setGameChatUnreadCount,
   resetGameEventLog,
   setActiveMatch,
@@ -38,7 +40,11 @@ export const shouldRestoreFinishedMatchView = (match, persistedMatchId = '') => 
 const appendLastActionIfNeeded = (match) => {
   const action = match?.currentRound?.lastAction;
   if (!action?.at) return;
-  const exists = (state.gameEventLog || []).some((item) => item.actionAt === action.at);
+  const exists = (state.gameEventLog || []).some((item) => (
+    item.actionAt === action.at
+    && item.type === (action.type || 'card_played')
+    && item.actorUserId === action.actorUserId
+  ));
   if (exists) return;
   appendGameEventLog({
     type: action.type || 'card_played',
@@ -116,22 +122,31 @@ const scheduleNextRoundAutostart = (match, render) => {
   clearRoundAutostart();
   nextRoundKey = key;
 
+  let secondsLeft = 5;
+  setGameStatusMessage(t('nextRoundIn', { seconds: secondsLeft }));
+  render();
+  nextRoundIntervalId = window.setInterval(() => {
+    secondsLeft -= 1;
+    if (secondsLeft <= 0) {
+      window.clearInterval(nextRoundIntervalId);
+      nextRoundIntervalId = null;
+      setGameStatusMessage(t('waitingNextRound'));
+      render();
+      return;
+    }
+
+    setGameStatusMessage(t('nextRoundIn', { seconds: secondsLeft }));
+    render();
+  }, 1000);
+
   if (state.activeRoom.ownerId !== state.user.id) {
-    setGameStatusMessage(t('waitingNextRound'));
     return;
   }
 
-  let secondsLeft = 8;
-  setGameStatusMessage(t('nextRoundIn', { seconds: secondsLeft }));
-  nextRoundIntervalId = window.setInterval(() => {
-    secondsLeft -= 1;
-    if (secondsLeft <= 0) return;
-    setGameStatusMessage(t('nextRoundIn', { seconds: secondsLeft }));
-  }, 1000);
   nextRoundTimerId = window.setTimeout(async () => {
     clearRoundAutostart();
     await startNextRound(render);
-  }, 8000);
+  }, 5000);
 };
 
 export const activateMatch = (match, { withTab = true, forceViewTab = false, keepViewTab = false } = {}) => {
@@ -218,6 +233,7 @@ export const playMatchCard = async (render, cardCode, options = {}) => {
         guessedCardCode: options.guessedCardCode || null,
         cardInstanceId: options.cardInstanceId || null,
         shouldSwap: typeof options.shouldSwap === 'boolean' ? options.shouldSwap : null,
+        shouldReact: typeof options.shouldReact === 'boolean' ? options.shouldReact : null,
       }),
     });
     setGameCardPlayPrompt(null);
@@ -242,6 +258,13 @@ export const playMatchCard = async (render, cardCode, options = {}) => {
 export const sendGameChatMessage = (render) => {
   const text = safeTextValue('#gameChatInput', 512);
   if (!state.activeRoom?.roomId || text === '') return;
+  appendRoomChatMessage({
+    username: state.user?.username || 'user',
+    role: (state.activeRoom.participants || []).find((participant) => participant.userId === state.user?.id)?.role || 'player',
+    userId: state.user?.id || null,
+    text,
+    timestamp: Date.now(),
+  });
   sendSocketMessage({
     type: 'room_event',
     roomId: state.activeRoom.roomId,
@@ -258,6 +281,7 @@ export const sendGameChatMessage = (render) => {
   }
   render();
   window.requestAnimationFrame(() => {
+    syncGameChatScroll();
     const nextInput = document.querySelector('#gameChatInput');
     if (nextInput instanceof HTMLInputElement) {
       nextInput.focus();
@@ -290,6 +314,7 @@ export const leaveGameAndRoom = async (render) => {
   clearRoundAutostart();
   setGameChatOpen(false);
   setGameChatUnreadCount(0);
+  setGameConfirmPrompt(null);
   setRoomNoticeMessage('');
   setActiveTab('home');
   showToast(t('leftGame'), 'ok');
@@ -354,6 +379,7 @@ export const leaveFinishedMatchRoom = async (render) => {
   clearRoundAutostart();
   setGameChatOpen(false);
   setGameChatUnreadCount(0);
+  setGameConfirmPrompt(null);
   setRoomNoticeMessage('');
   setActiveTab('home');
   showToast(t('leftGame'), 'ok');

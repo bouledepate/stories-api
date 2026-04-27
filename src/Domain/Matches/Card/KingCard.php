@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stories\Domain\Matches\Card;
 
+use Stories\Domain\Matches\Model\RoundAction;
 use Stories\Domain\Matches\Service\CardEffectContext;
 
 final class KingCard extends AbstractCharacterCard
@@ -30,5 +31,16 @@ final class KingCard extends AbstractCharacterCard
 
     public function resolve(CardEffectContext $context): void
     {
+        $context->eliminatePlayer($context->play->actorUserId);
+        $context->round->lastAction = new RoundAction(
+            'king_discard_elimination',
+            $context->play->actorUserId,
+            $context->playedCard->code,
+            $context->playedCard->name,
+            gmdate(DATE_ATOM),
+            $context->play->actorUserId,
+            targetCardCode: $context->playedCard->code,
+            targetCardName: $context->playedCard->name,
+        );
     }
 }

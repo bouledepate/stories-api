@@ -35,7 +35,7 @@ final class TurnResolver
         }
     }
 
-    public function resolvePendingDecision(RoundState $round, CardPlay $play): void
+    public function resolvePendingDecision(RoundState $round, CardPlay $play): string
     {
         $pendingDecision = $round->pendingDecision;
         if ($pendingDecision === null) {
@@ -46,12 +46,23 @@ final class TurnResolver
             throw new ApiException(ApiErrorCode::NOT_PLAYER_TURN);
         }
 
-        if ($pendingDecision->type !== 'feudal_lord_swap') {
-            throw new ApiException(ApiErrorCode::MATCH_STATE_INVALID);
+        if ($pendingDecision->type === 'feudal_lord_swap') {
+            $this->resolveFeudalPendingDecision($round, $play, $pendingDecision);
+            return $pendingDecision->originActorUserId;
         }
 
-        $targetState = $round->getPlayerState($pendingDecision->targetUserId);
-        $secondTargetState = $round->getPlayerState($pendingDecision->secondTargetUserId);
+        if ($pendingDecision->type === 'guard_miss_peasant_reaction') {
+            $this->resolvePeasantReactionPendingDecision($round, $play, $pendingDecision);
+            return $pendingDecision->originActorUserId;
+        }
+
+        throw new ApiException(ApiErrorCode::MATCH_STATE_INVALID);
+    }
+
+    private function resolveFeudalPendingDecision(RoundState $round, CardPlay $play, \Stories\Domain\Matches\Model\PendingDecision $pendingDecision): void
+    {
+        $targetState = $round->getPlayerState((string) $pendingDecision->targetUserId);
+        $secondTargetState = $round->getPlayerState((string) $pendingDecision->secondTargetUserId);
         if ($play->shouldSwap === true) {
             $targetState->swapFirstHandCardWith($secondTargetState);
             $round->lastAction = new RoundAction(
@@ -72,6 +83,55 @@ final class TurnResolver
                 gmdate(DATE_ATOM),
                 $pendingDecision->targetUserId,
                 secondTargetUserId: $pendingDecision->secondTargetUserId,
+            );
+        }
+
+        $round->clearPendingDecision();
+    }
+
+    private function resolvePeasantReactionPendingDecision(RoundState $round, CardPlay $play, \Stories\Domain\Matches\Model\PendingDecision $pendingDecision): void
+    {
+        $playerState = $round->getPlayerState($play->actorUserId);
+        if ($pendingDecision->canReact && $play->shouldReact === true) {
+            $playedCard = $playerState->removeCardFromHand('peasant', $play->cardInstanceId);
+            $playerState->addToDiscard($playedCard);
+            $round->drawFor($play->actorUserId);
+            $drawnCard = $playerState->peekFirstCardInHand();
+
+            if ($drawnCard?->code === $pendingDecision->guessedCardCode) {
+                $this->eliminations->eliminate($round, $play->actorUserId);
+                $round->lastAction = new RoundAction(
+                    'peasant_reaction_eliminated',
+                    $play->actorUserId,
+                    $pendingDecision->cardCode,
+                    $pendingDecision->cardName,
+                    gmdate(DATE_ATOM),
+                    $play->actorUserId,
+                    $pendingDecision->guessedCardCode,
+                    $pendingDecision->guessedCardName,
+                );
+            } else {
+                $round->lastAction = new RoundAction(
+                    'peasant_reaction_safe',
+                    $play->actorUserId,
+                    $pendingDecision->cardCode,
+                    $pendingDecision->cardName,
+                    gmdate(DATE_ATOM),
+                    $play->actorUserId,
+                    $pendingDecision->guessedCardCode,
+                    $pendingDecision->guessedCardName,
+                );
+            }
+        } else {
+            $round->lastAction = new RoundAction(
+                'guard_miss_resolved',
+                $play->actorUserId,
+                $pendingDecision->cardCode,
+                $pendingDecision->cardName,
+                gmdate(DATE_ATOM),
+                $play->actorUserId,
+                $pendingDecision->guessedCardCode,
+                $pendingDecision->guessedCardName,
             );
         }
 

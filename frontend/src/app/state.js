@@ -45,6 +45,7 @@ export const state = {
   gameChatUnreadCount: 0,
   gameCardPreview: null,
   gameCardPlayPrompt: null,
+  gameConfirmPrompt: null,
   gameStatusMessage: '',
   homeStatusMessage: '',
   myRooms: [],

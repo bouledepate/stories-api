@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stories\Domain\Matches\Card;
 
+use Stories\Domain\Matches\Model\RoundAction;
 use Stories\Domain\Matches\Service\CardEffectContext;
 
 final class QueenCard extends AbstractCharacterCard
@@ -30,5 +31,12 @@ final class QueenCard extends AbstractCharacterCard
 
     public function resolve(CardEffectContext $context): void
     {
+        $context->round->lastAction = new RoundAction(
+            'queen_no_decree',
+            $context->play->actorUserId,
+            $context->playedCard->code,
+            $context->playedCard->name,
+            gmdate(DATE_ATOM),
+        );
     }
 }

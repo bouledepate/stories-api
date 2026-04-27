@@ -54,6 +54,24 @@ final class RebelCard extends AbstractCharacterCard
 
         $discardedCard = $targetState->removeFirstCardFromHand();
         $targetState->addToDiscard($discardedCard);
+        if ($discardedCard?->code === 'king') {
+            $context->eliminatePlayer($targetUserId);
+            $context->round->lastAction = new RoundAction(
+                'king_discard_elimination',
+                $context->play->actorUserId,
+                $context->playedCard->code,
+                $context->playedCard->name,
+                gmdate(DATE_ATOM),
+                $targetUserId,
+                null,
+                null,
+                $discardedCard->code,
+                $discardedCard->name,
+            );
+
+            return;
+        }
+
         $context->round->drawFor($targetUserId);
 
         $context->round->lastAction = new RoundAction(

@@ -58,6 +58,7 @@ const mapErrorCode = (code, status) => {
     CARD_GUESS_REQUIRED: 'cardGuessRequired',
     CARD_GUESS_INVALID: 'cardGuessInvalid',
     GUARD_CANNOT_GUESS_GUARD: 'guardCannotGuessGuard',
+    PEASANT_REACTION_ONLY: 'peasantReactionOnly',
     CARD_PLAY_BLOCKED: 'cardPlayBlocked',
     TARGET_PLAYER_PROTECTED: 'targetPlayerProtected',
     MATCH_STATE_INVALID: 'matchStateInvalid',

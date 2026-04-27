@@ -13,6 +13,7 @@ final class CardPlay
         public readonly ?string $guessedCardCode = null,
         public readonly ?string $cardInstanceId = null,
         public readonly ?string $secondTargetUserId = null,
+        public readonly ?bool $shouldReact = null,
         public readonly ?bool $shouldSwap = null,
     ) {
     }

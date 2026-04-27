@@ -2,7 +2,7 @@ import { state } from '../../state';
 import { t } from '../../i18n';
 import { showToast } from '../../services/feedback';
 import { getActiveMatchOpponents, getTargetableMatchPlayers, isMyTurnInMatch } from '../../store/selectors';
-import { patchGameCardPlayPrompt, setActiveTab, setGameCardPlayPrompt, setGameCardPreview, setGameChatOpen, setGameChatUnreadCount } from '../../store/mutations';
+import { patchGameCardPlayPrompt, setActiveTab, setGameCardPlayPrompt, setGameCardPreview, setGameChatOpen, setGameChatUnreadCount, setGameConfirmPrompt } from '../../store/mutations';
 import { matchCardCatalog } from './card-catalog';
 import { leaveFinishedMatchRoom, leaveGameAndRoom, playMatchCard, sendGameChatMessage, startMatchFromRoom, syncGameChatScroll } from './game-flow';
 
@@ -16,6 +16,9 @@ export const bindGameEvents = (render) => {
     render();
     if (nextOpen) {
       syncGameChatScroll();
+      window.requestAnimationFrame(() => {
+        document.querySelector('#gameChatInput')?.focus();
+      });
     }
   });
 
@@ -34,6 +37,11 @@ export const bindGameEvents = (render) => {
     render();
   });
 
+  document.querySelector('[data-act="closeGameConfirmPrompt"]')?.addEventListener('click', () => {
+    setGameConfirmPrompt(null);
+    render();
+  });
+
   document.querySelector('.game-card-preview-shell')?.addEventListener('click', (event) => {
     if (event.target !== event.currentTarget) return;
     setGameCardPreview(null);
@@ -46,11 +54,21 @@ export const bindGameEvents = (render) => {
     render();
   });
 
+  document.querySelector('.game-confirm-prompt-shell')?.addEventListener('click', (event) => {
+    if (event.target !== event.currentTarget) return;
+    setGameConfirmPrompt(null);
+    render();
+  });
+
   document.querySelector('[data-act="exitGame"]')?.addEventListener('click', async () => {
-    // eslint-disable-next-line no-alert
-    const confirmed = window.confirm(t('gameExitConfirm'));
-    if (!confirmed) return;
-    await leaveGameAndRoom(render);
+    setGameConfirmPrompt({
+      type: 'leave_game',
+      title: t('gameExitConfirmTitle'),
+      message: t('gameExitConfirm'),
+      confirmLabel: t('leaveRoom'),
+      cancelLabel: t('cancel'),
+    });
+    render();
   });
 
   document.querySelector('[data-act="leaveFinishedMatch"]')?.addEventListener('click', async () => {
@@ -85,6 +103,19 @@ export const bindGameEvents = (render) => {
 
       const cardCode = button.dataset.cardCode || '';
       const cardInstanceId = button.dataset.cardInstanceId || '';
+      if (cardCode === 'king') {
+        setGameConfirmPrompt({
+          type: 'play_king',
+          title: t('kingPromptTitle'),
+          message: t('kingSelfEliminateConfirm'),
+          confirmLabel: t('kingPromptConfirm'),
+          cancelLabel: t('cancel'),
+          payload: { cardCode, cardInstanceId },
+        });
+        render();
+        return;
+      }
+
       if (cardCode !== 'guard' && cardCode !== 'scout' && cardCode !== 'executioner' && cardCode !== 'rebel' && cardCode !== 'feudal_lord') {
         await playMatchCard(render, cardCode, { cardInstanceId });
         return;
@@ -234,6 +265,37 @@ export const bindGameEvents = (render) => {
 
   document.querySelector('[data-act="confirmFeudalKeep"]')?.addEventListener('click', async () => {
     await playMatchCard(render, 'feudal_lord', { shouldSwap: false });
+  });
+
+  document.querySelector('[data-act="confirmPeasantReact"]')?.addEventListener('click', async () => {
+    await playMatchCard(render, 'peasant', { shouldReact: true });
+  });
+
+  document.querySelector('[data-act="skipPeasantReact"]')?.addEventListener('click', async () => {
+    await playMatchCard(render, 'peasant', { shouldReact: false });
+  });
+
+  document.querySelector('[data-act="resolveGuardMiss"]')?.addEventListener('click', async () => {
+    await playMatchCard(render, 'peasant', { shouldReact: false });
+  });
+
+  document.querySelector('[data-act="confirmGamePrompt"]')?.addEventListener('click', async () => {
+    const prompt = state.gameConfirmPrompt;
+    if (!prompt) return;
+
+    setGameConfirmPrompt(null);
+    render();
+
+    if (prompt.type === 'leave_game') {
+      await leaveGameAndRoom(render);
+      return;
+    }
+
+    if (prompt.type === 'play_king') {
+      await playMatchCard(render, prompt.payload?.cardCode || 'king', {
+        cardInstanceId: prompt.payload?.cardInstanceId || null,
+      });
+    }
   });
 
   document.querySelectorAll('[data-act="previewDiscardCard"]').forEach((button) => {
