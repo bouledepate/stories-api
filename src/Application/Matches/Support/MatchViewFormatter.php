@@ -37,6 +37,7 @@ final class MatchViewFormatter
                     'lockedCardInstanceId' => $player->userId === $viewerUserId ? $roundPlayer->lockedCardInstanceId : null,
                     'lockedCardCode' => $player->userId === $viewerUserId ? $roundPlayer->lockedCardCode : null,
                     'protectedFromEffects' => $roundPlayer->protectedFromEffects,
+                    'hasBlackRoseToken' => $roundPlayer->hasBlackRoseToken,
                 ];
             }
 

@@ -281,6 +281,9 @@ export const dictionaries = {
     executionerNoTargetEvent: '{actor} разыграл Палача, но подходящей цели не было.',
     protectedBadge: 'защита',
     ladyProtectionEvent: '{actor} получил защиту от эффектов других игроков до своего следующего хода.',
+    blackRoseBadge: 'чёрная роза',
+    bishopTokenEvent: '{actor} положил на себя жетон Чёрная роза.',
+    blackRoseSavedEvent: '{target} сбросил жетон Чёрная роза вместо карты {card} из-за эффекта {actor}.',
     rebelPromptTitle: 'Мятежник',
     rebelPromptHint: 'Выберите игрока. Он сбросит карту и доберёт новую. Можно выбрать и себя.',
     rebelPromptSummary: 'Цель сбросит текущую карту и возьмёт новую из колоды, если она есть.',
@@ -563,5 +566,8 @@ export const dictionaries = {
     feudalInspectEvent: '{actor} looked at the cards of {firstTarget} and {secondTarget}.',
     feudalSwapEvent: '{actor} swapped the cards of {firstTarget} and {secondTarget}.',
     feudalKeepEvent: '{actor} decided not to swap the cards of {firstTarget} and {secondTarget}.',
+    blackRoseBadge: 'black rose',
+    bishopTokenEvent: '{actor} placed a Black Rose token on themselves.',
+    blackRoseSavedEvent: '{target} discarded a Black Rose token instead of card {card} because of {actor}\'s effect.',
   },
 };

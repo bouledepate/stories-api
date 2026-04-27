@@ -33,11 +33,27 @@ final class RebelCard extends AbstractCharacterCard
     {
         $targetUserId = $context->requireTargetUserId(true);
         $targetState = $context->targetState($targetUserId);
-        $discardedCard = $targetState->removeFirstCardFromHand();
-        if ($discardedCard !== null) {
-            $targetState->addToDiscard($discardedCard);
+        $currentCard = $targetState->peekFirstCardInHand();
+        if ($currentCard !== null && $targetState->shouldConsumeBlackRoseInstead($currentCard, $context->play->actorUserId !== $targetUserId)) {
+            $targetState->consumeBlackRoseToken();
+            $context->round->lastAction = new RoundAction(
+                'black_rose_saved',
+                $context->play->actorUserId,
+                $context->playedCard->code,
+                $context->playedCard->name,
+                gmdate(DATE_ATOM),
+                $targetUserId,
+                null,
+                null,
+                $currentCard->code,
+                $currentCard->name,
+            );
+
+            return;
         }
 
+        $discardedCard = $targetState->removeFirstCardFromHand();
+        $targetState->addToDiscard($discardedCard);
         $context->round->drawFor($targetUserId);
 
         $context->round->lastAction = new RoundAction(

@@ -950,6 +950,108 @@ final class MatchLifecycleTest extends TestCase
         self::assertCount(1, $updated->currentRound?->getPlayerState('u1')->discard ?? []);
     }
 
+    public function testBishopAppliesBlackRoseAndPreventsForcedDiscardFromOtherPlayer(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+
+        $afterBishop = $engine->playCard(
+            new MatchState(
+                id: 'match-bishop-token',
+                roomId: 'room-1',
+                ownerUserId: 'u1',
+                status: MatchStatus::ACTIVE,
+                players: [
+                    new MatchPlayer('u1', 'owner', 0, 0),
+                    new MatchPlayer('u2', 'player2', 0, 1),
+                ],
+                roundNumber: 1,
+                winnerUserId: null,
+                currentRound: new RoundState(
+                    status: RoundStatus::ACTIVE,
+                    activePlayerId: 'u1',
+                    setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                    deck: [new Card('guard', 'Стражник', 1, 'guard-deck')],
+                    revealedCards: [],
+                    players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('bishop', 'Епископ', 7, 'bishop-u1'),
+                        new Card('king', 'Король', 9, 'king-u1'),
+                    ], []),
+                        'u2' => new RoundPlayerState(false, [new Card('rebel', 'Мятежник', 5, 'rebel-u2')], []),
+                    ],
+                    lastAction: new RoundAction('card_played', 'u2', 'guard', 'Стражник', $now),
+                    finishedReason: null,
+                    roundWinners: [],
+                ),
+                lastRoundSummary: null,
+                createdAt: $now,
+                updatedAt: $now,
+            ),
+            new CardPlay('u1', 'bishop', null, null, 'bishop-u1')
+        );
+
+        self::assertTrue($afterBishop->currentRound?->getPlayerState('u1')->hasBlackRoseToken);
+        self::assertSame('bishop_token_applied', $afterBishop->currentRound?->lastAction?->type);
+        self::assertSame('u2', $afterBishop->currentRound?->activePlayerId);
+
+        $afterRebel = $engine->playCard($afterBishop, new CardPlay('u2', 'rebel', 'u1', null, 'rebel-u2'));
+
+        self::assertSame('black_rose_saved', $afterRebel->currentRound?->lastAction?->type);
+        self::assertFalse($afterRebel->currentRound?->getPlayerState('u1')->hasBlackRoseToken);
+        self::assertSame('king', $afterRebel->currentRound?->getPlayerState('u1')->peekFirstCardInHand()?->code);
+        self::assertCount(1, $afterRebel->currentRound?->getPlayerState('u1')->discard ?? []);
+        self::assertSame('bishop', $afterRebel->currentRound?->getPlayerState('u1')->discard[0]->code ?? null);
+    }
+
+    public function testBlackRoseDoesNotPreventSelfDiscard(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+
+        $match = new MatchState(
+            id: 'match-bishop-self-rebel',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('guard', 'Стражник', 1, 'guard-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('rebel', 'Мятежник', 5, 'rebel-u1'),
+                        new Card('king', 'Король', 9, 'king-u1'),
+                    ], [new Card('bishop', 'Епископ', 7, 'bishop-discard')], false, null, null, false, true),
+                    'u2' => new RoundPlayerState(false, [new Card('guard', 'Стражник', 1, 'guard-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'guard', 'Стражник', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+        );
+
+        $updated = $engine->playCard($match, new CardPlay('u1', 'rebel', 'u1', null, 'rebel-u1'));
+
+        self::assertSame('rebel_redraw', $updated->currentRound?->lastAction?->type);
+        self::assertTrue($updated->currentRound?->getPlayerState('u1')->hasBlackRoseToken);
+        self::assertCount(3, $updated->currentRound?->getPlayerState('u1')->discard ?? []);
+        self::assertSame('bishop', $updated->currentRound?->getPlayerState('u1')->discard[0]->code ?? null);
+        self::assertSame('rebel', $updated->currentRound?->getPlayerState('u1')->discard[1]->code ?? null);
+        self::assertSame('king', $updated->currentRound?->getPlayerState('u1')->discard[2]->code ?? null);
+    }
+
     /**
      * @param list<array<string,mixed>> $players
      * @return array<string,mixed>

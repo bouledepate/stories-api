@@ -21,6 +21,7 @@ final class RoundPlayerState
         public ?string $lockedCardInstanceId = null,
         public ?string $lockedCardCode = null,
         public bool $protectedFromEffects = false,
+        public bool $hasBlackRoseToken = false,
     ) {
     }
 
@@ -49,6 +50,7 @@ final class RoundPlayerState
             isset($data['lockedCardInstanceId']) ? (string) $data['lockedCardInstanceId'] : null,
             isset($data['lockedCardCode']) ? (string) $data['lockedCardCode'] : null,
             (bool) ($data['protectedFromEffects'] ?? false),
+            (bool) ($data['hasBlackRoseToken'] ?? false),
         );
     }
 
@@ -150,6 +152,7 @@ final class RoundPlayerState
     {
         $this->eliminated = true;
         $this->clearLockedCard();
+        $this->hasBlackRoseToken = false;
     }
 
     public function markAutoDiscardOnTurn(): void
@@ -205,6 +208,21 @@ final class RoundPlayerState
         $this->protectedFromEffects = false;
     }
 
+    public function applyBlackRoseToken(): void
+    {
+        $this->hasBlackRoseToken = true;
+    }
+
+    public function consumeBlackRoseToken(): void
+    {
+        $this->hasBlackRoseToken = false;
+    }
+
+    public function shouldConsumeBlackRoseInstead(Card $card, bool $causedByOtherPlayer): bool
+    {
+        return $causedByOtherPlayer && $this->hasBlackRoseToken && $card->value >= 7;
+    }
+
     public function handValue(): int
     {
         $max = 0;
@@ -236,6 +254,7 @@ final class RoundPlayerState
             'lockedCardInstanceId' => $this->lockedCardInstanceId,
             'lockedCardCode' => $this->lockedCardCode,
             'protectedFromEffects' => $this->protectedFromEffects,
+            'hasBlackRoseToken' => $this->hasBlackRoseToken,
         ];
     }
 }

@@ -16,9 +16,9 @@ final class PlayCardRequest
         #[Length(min: 1, max: 64)]
         public readonly string $cardCode,
         public readonly ?string $targetUserId = null,
-        public readonly ?string $secondTargetUserId = null,
         public readonly ?string $guessedCardCode = null,
         public readonly ?string $cardInstanceId = null,
+        public readonly ?string $secondTargetUserId = null,
         public readonly ?bool $shouldSwap = null,
     ) {
     }
@@ -29,9 +29,9 @@ final class PlayCardRequest
         return new self(
             trim((string) ($data['cardCode'] ?? '')),
             isset($data['targetUserId']) ? trim((string) $data['targetUserId']) : null,
-            isset($data['secondTargetUserId']) ? trim((string) $data['secondTargetUserId']) : null,
             isset($data['guessedCardCode']) ? trim((string) $data['guessedCardCode']) : null,
             isset($data['cardInstanceId']) ? trim((string) $data['cardInstanceId']) : null,
+            isset($data['secondTargetUserId']) ? trim((string) $data['secondTargetUserId']) : null,
             array_key_exists('shouldSwap', $data) ? (bool) $data['shouldSwap'] : null,
         );
     }

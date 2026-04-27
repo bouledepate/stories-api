@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stories\Domain\Matches\Card;
 
+use Stories\Domain\Matches\Model\RoundAction;
 use Stories\Domain\Matches\Service\CardEffectContext;
 
 final class BishopCard extends AbstractCharacterCard
@@ -30,5 +31,13 @@ final class BishopCard extends AbstractCharacterCard
 
     public function resolve(CardEffectContext $context): void
     {
+        $context->actorState->applyBlackRoseToken();
+        $context->round->lastAction = new RoundAction(
+            'bishop_token_applied',
+            $context->play->actorUserId,
+            $context->playedCard->code,
+            $context->playedCard->name,
+            gmdate(DATE_ATOM),
+        );
     }
 }

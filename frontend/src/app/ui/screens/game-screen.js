@@ -153,6 +153,12 @@ const formatEventLine = (event) => {
       actor: highlightName(actorName),
     });
   }
+  if (event.type === 'bishop_token_applied') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    return t('bishopTokenEvent', {
+      actor: highlightName(actorName),
+    });
+  }
   if (event.type === 'rebel_redraw') {
     const actorName = resolvePlayerName(event.actorUserId);
     const targetName = resolvePlayerName(event.targetUserId);
@@ -160,6 +166,15 @@ const formatEventLine = (event) => {
       actor: highlightName(actorName),
       target: highlightName(targetName),
       card: highlightCard(event.targetCardName || event.targetCardCode || t('systemUnknownUser')),
+    });
+  }
+  if (event.type === 'black_rose_saved') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    const targetName = resolvePlayerName(event.targetUserId);
+    return t('blackRoseSavedEvent', {
+      actor: highlightName(actorName),
+      target: highlightName(targetName),
+      card: highlightCard(event.targetCardName || event.targetCardCode || 'card'),
     });
   }
   if (event.type === 'feudal_no_target') {
@@ -445,12 +460,14 @@ const renderTablePlayers = () => {
     const discard = Array.isArray(roundPlayer?.discard) ? roundPlayer.discard : [];
     const hand = Array.isArray(roundPlayer?.hand) ? roundPlayer.hand : [];
     const isProtected = Boolean(roundPlayer?.protectedFromEffects);
+    const hasBlackRoseToken = Boolean(roundPlayer?.hasBlackRoseToken);
     const showShowdown = round?.status === 'finished' && hand.length > 0;
     return `
       <article class="table-player ${seats[index] || 'seat-top'} ${isActive ? 'active' : ''}">
         <div class="table-player-name">
           ${esc(player.username || player.userId)}
           ${isProtected ? `<span class="table-player-status protection">${esc(t('protectedBadge'))}</span>` : ''}
+          ${hasBlackRoseToken ? `<span class="table-player-status rose">${esc(t('blackRoseBadge'))}</span>` : ''}
         </div>
         <div class="table-player-meta">
           <span class="table-player-discard-count">${t('gameDiscardCount')}: ${esc(String(discard.length))}</span>
@@ -525,6 +542,7 @@ const renderHandDock = () => {
   const lockedCardInstanceId = me?.lockedCardInstanceId || null;
   const lockedCardCode = me?.lockedCardCode || null;
   const isProtected = Boolean(me?.protectedFromEffects);
+  const hasBlackRoseToken = Boolean(me?.hasBlackRoseToken);
 
   return `
     <section class="game-hand-dock">
@@ -533,6 +551,7 @@ const renderHandDock = () => {
           <span class="game-my-table-label">
             ${t('gameMyTable')}
             ${isProtected ? `<span class="table-player-status protection">${esc(t('protectedBadge'))}</span>` : ''}
+            ${hasBlackRoseToken ? `<span class="table-player-status rose">${esc(t('blackRoseBadge'))}</span>` : ''}
           </span>
           <span class="game-turn-badge ${canPlay ? 'turn' : 'wait'}">${canPlay ? t('gameYourTurn') : t('gameWaitTurn')}</span>
         </div>
