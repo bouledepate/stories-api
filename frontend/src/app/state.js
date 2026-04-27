@@ -3,6 +3,7 @@ import { storage } from './services/storage';
 const wsHost = (window.location.hostname === '0.0.0.0' || window.location.hostname === '') ? 'localhost' : window.location.hostname;
 const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
 const persistedRoomId = storage.readActiveRoomId();
+const persistedMatchId = storage.readActiveMatchId();
 
 export const state = {
   apiBase: window.location.origin,
@@ -10,6 +11,7 @@ export const state = {
   token: storage.readToken(),
   user: null,
   activeRoom: persistedRoomId ? { roomId: persistedRoomId } : null,
+  activeMatch: persistedMatchId ? { matchId: persistedMatchId } : null,
   activeTab: 'home',
   homeLobbies: [],
   lobbyCatalog: [],
@@ -30,13 +32,20 @@ export const state = {
   joinLobbyRoomName: '',
   joinLobbyNeedsPassword: false,
   joinLobbyPassword: '',
+  joinLobbySpectator: false,
   roomSwitchPromptOpen: false,
   roomSwitchPromptMode: 'leave',
   roomSwitchTargetLabel: '',
   pendingJoinAction: null,
   suppressOwnJoinPresence: Boolean(persistedRoomId),
-  roomChatMessages: [],
+  roomChatMessages: storage.readRoomChatMessages(persistedRoomId),
   roomChatInputShouldFocus: false,
+  gameEventLog: storage.readGameEventLog(persistedMatchId),
+  gameChatOpen: false,
+  gameChatUnreadCount: 0,
+  gameCardPreview: null,
+  gameCardPlayPrompt: null,
+  gameStatusMessage: '',
   homeStatusMessage: '',
   myRooms: [],
   roomNoticeMessage: '',

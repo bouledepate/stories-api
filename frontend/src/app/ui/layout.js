@@ -2,12 +2,27 @@ import { state } from '../state';
 import { t } from '../i18n';
 import { esc } from '../security';
 import { renderAuthModal, renderJoinLobbyModal, renderRoomModal, renderRoomNotice, renderRoomSettingsModal, renderRoomSwitchModal } from './modals';
+import { renderGameScreen } from './screens/game-screen';
 import { renderHome } from './screens/home-screen';
 import { renderLobbies } from './screens/lobbies-screen';
 import { renderProfile } from './screens/profile-screen';
 import { renderRoomManage, renderRoomPanel } from './screens/room-screen';
 
 export const renderLayout = () => {
+  if (state.activeTab === 'game') {
+    return `
+    <main class="layout dark game-mode">
+      <header class="game-topbar">
+        <div class="game-topbar-brand">${t('appName')}</div>
+        <div class="game-topbar-actions">
+          <button class="chip" data-act="exitGame">${t('logout')}</button>
+        </div>
+      </header>
+      ${renderGameScreen()}
+      <div id="toastContainer" class="toast-container"></div>
+    </main>`;
+  }
+
   const authAction = state.user
     ? `<div class="profile-actions"><button class="avatar-btn" data-tab="profile">${esc((state.user.username || 'U').slice(0, 1).toUpperCase())}</button><button class="chip" data-act="logout">${t('logout')}</button></div>`
     : `<button class="primary" data-act="toggleAuth">${t('openAuth')}</button>`;

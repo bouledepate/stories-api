@@ -1,0 +1,157 @@
+.seat-top,
+.seat-top-left,
+.seat-top-right,
+.seat-left-mid,
+.seat-right-mid,
+.seat-left-top,
+.seat-left-bottom,
+.seat-right-top,
+.seat-right-bottom {
+  transform: none;
+}
+
+.table-layout-2 .seat-top {
+  left: 50%;
+  top: var(--table-top-offset);
+  transform: translateX(-50%);
+}
+
+.table-layout-3 .seat-top-left {
+  left: calc(50% - var(--table-player-width) - var(--table-three-gap));
+  top: var(--table-upper-offset);
+}
+
+.table-layout-3 .seat-top-right {
+  left: calc(50% + var(--table-three-gap));
+  top: var(--table-upper-offset);
+}
+
+.table-layout-4 .seat-left-mid {
+  left: var(--table-side-offset);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.table-layout-4 .seat-top {
+  left: 50%;
+  top: var(--table-top-offset);
+  transform: translateX(-50%);
+}
+
+.table-layout-4 .seat-right-mid {
+  right: var(--table-side-offset);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.table-layout-5 .seat-left-top {
+  left: var(--table-side-offset-tight);
+  top: var(--table-upper-offset);
+}
+
+.table-layout-5 .seat-top {
+  left: 50%;
+  top: var(--table-top-offset);
+  transform: translateX(-50%);
+}
+
+.table-layout-5 .seat-right-top {
+  right: var(--table-side-offset-tight);
+  top: var(--table-upper-offset);
+}
+
+.table-layout-5 .seat-right-bottom {
+  right: var(--table-side-offset-tight);
+  bottom: var(--table-lower-offset);
+}
+
+.table-layout-6 .seat-left-top {
+  left: var(--table-side-offset-tight);
+  top: var(--table-upper-offset);
+}
+
+.table-layout-6 .seat-left-bottom {
+  left: var(--table-side-offset-tight);
+  bottom: var(--table-lower-offset);
+}
+
+.table-layout-6 .seat-top {
+  left: 50%;
+  top: var(--table-top-offset);
+  transform: translateX(-50%);
+}
+
+.table-layout-6 .seat-right-top {
+  right: var(--table-side-offset-tight);
+  top: var(--table-upper-offset);
+}
+
+.table-layout-6 .seat-right-bottom {
+  right: var(--table-side-offset-tight);
+  bottom: var(--table-lower-offset);
+}
+
+.table-layout-2 .game-center-stack,
+.table-layout-3 .game-center-stack,
+.table-layout-4 .game-center-stack,
+.table-layout-5 .game-center-stack,
+.table-layout-6 .game-center-stack {
+  bottom: 18px;
+}
+
+.table-layout-2 .table-player,
+.table-layout-3 .table-player,
+.table-layout-4 .table-player {
+  width: var(--table-player-width);
+}
+
+.table-layout-5 .table-player,
+.table-layout-6 .table-player {
+  width: var(--table-player-width-tight);
+}
+
+@media (max-width: 1500px) {
+  .table-layout-4 .seat-left-mid,
+  .table-layout-4 .seat-right-mid {
+    top: 47%;
+  }
+
+  .table-layout-5 .seat-top,
+  .table-layout-6 .seat-top {
+    top: calc(var(--table-top-offset) + 2px);
+  }
+}
+
+@media (max-width: 1380px) {
+  .table-layout-4 .seat-left-mid,
+  .table-layout-4 .seat-right-mid {
+    top: 45%;
+  }
+
+  .table-layout-5 .seat-top,
+  .table-layout-6 .seat-top {
+    top: 12px;
+  }
+
+  .table-layout-5 .game-center-stack,
+  .table-layout-6 .game-center-stack {
+    bottom: 14px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .table-layout-4 .seat-left-mid,
+  .table-layout-4 .seat-right-mid {
+    top: 43%;
+  }
+
+  .table-layout-5 .seat-top,
+  .table-layout-6 .seat-top {
+    top: 10px;
+  }
+
+  .table-layout-5 .game-center-stack,
+  .table-layout-6 .game-center-stack {
+    bottom: 12px;
+  }
+}

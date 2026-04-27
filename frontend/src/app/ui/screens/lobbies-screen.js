@@ -26,6 +26,7 @@ export const renderLobbies = () => `
         <div class="lobby-meta">
           <h4>${esc(room.name)}</h4>
           <p>${roomAccessSummary(room)}</p>
+          <p>${t('roomOwnerName')}: ${esc(room.ownerUsername || room.ownerUserId || '—')}</p>
         </div>
         <div class="lobby-count">👥 ${room.playersCount} / ${room.maxPlayers || 6}</div>
         <button class="secondary" data-act="joinLobby" data-room-id="${esc(room.roomId)}" data-room-name="${esc(room.name)}" data-room-owner-id="${esc(room.ownerUserId || '')}" data-room-has-password="${room.hasPassword ? '1' : '0'}">${t('joinLobby')}</button>

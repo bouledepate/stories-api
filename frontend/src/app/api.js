@@ -1,5 +1,12 @@
 import { state } from './state';
 import { t } from './i18n';
+import {
+  clearActiveMatch,
+  clearActiveRoom,
+  setActiveTab,
+  setToken,
+  setUser,
+} from './store/mutations';
 
 const authHeader = () => (state.token ? { Authorization: `Bearer ${state.token}` } : {});
 
@@ -36,6 +43,25 @@ const mapErrorCode = (code, status) => {
     ONLY_PLAYERS_CAN_BE_KICKED: 'onlyPlayersCanBeKicked',
     USER_BLOCKED_IN_ROOM: 'blockedNotice',
     INVITE_CODE_ROTATE_COOLDOWN: 'inviteRotateCooldown',
+    MATCH_NOT_FOUND: 'matchNotFound',
+    MATCH_ALREADY_EXISTS: 'matchAlreadyExists',
+    MATCH_ALREADY_FINISHED: 'matchAlreadyFinished',
+    NOT_ENOUGH_PLAYERS_TO_START_MATCH: 'notEnoughPlayersToStartMatch',
+    ROUND_NOT_ACTIVE: 'roundNotActive',
+    ROUND_ALREADY_ACTIVE: 'roundAlreadyActive',
+    NOT_PLAYER_TURN: 'notPlayerTurn',
+    PLAYER_NOT_IN_MATCH: 'playerNotInMatch',
+    PLAYER_ELIMINATED: 'playerEliminated',
+    CARD_NOT_IN_HAND: 'cardNotInHand',
+    TARGET_PLAYER_REQUIRED: 'targetPlayerRequired',
+    TARGET_PLAYER_INVALID: 'targetPlayerInvalid',
+    CARD_GUESS_REQUIRED: 'cardGuessRequired',
+    CARD_GUESS_INVALID: 'cardGuessInvalid',
+    GUARD_CANNOT_GUESS_GUARD: 'guardCannotGuessGuard',
+    CARD_PLAY_BLOCKED: 'cardPlayBlocked',
+    TARGET_PLAYER_PROTECTED: 'targetPlayerProtected',
+    MATCH_STATE_INVALID: 'matchStateInvalid',
+    PLAYERS_NOT_READY: 'playersNotReady',
     VALIDATION_ERROR: 'validationFailed',
     UNKNOWN_ERROR: 'unknownError',
   };
@@ -85,6 +111,16 @@ export const callApi = async (path, options = {}) => {
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      if (state.socket && state.socket.readyState <= 1) {
+        state.socket.close();
+      }
+      setToken('');
+      setUser(null);
+      clearActiveMatch();
+      clearActiveRoom();
+      setActiveTab('home');
+    }
     const parsed = parseApiError(response.status, data, text);
     const error = new Error(parsed.message || t('unknownError'));
     error.code = parsed.key;

@@ -52,6 +52,15 @@ export const renderRoomPanel = () => {
   const isOwner = Boolean(state.user?.id) && state.user.id === state.activeRoom.ownerId;
   const myParticipant = participants.find((participant) => participant.userId === state.user?.id);
   const canToggleReady = myParticipant?.role === 'owner' || myParticipant?.role === 'player';
+  const hasMatch = Boolean(state.activeMatch?.matchId);
+  const hasLiveMatch = hasMatch && state.activeMatch?.status !== 'finished';
+  const canViewFinishedMatch = hasMatch
+    && state.activeMatch?.status === 'finished'
+    && (
+      (Array.isArray(state.activeMatch?.players) && state.activeMatch.players.some((player) => player.userId === state.user?.id))
+      || myParticipant?.role === 'spectator'
+    );
+  const canOpenGame = hasLiveMatch || canViewFinishedMatch;
   const visibilityLabel = state.activeRoom.isPublic ? t('visibilityPublic') : t('visibilityPrivate');
   const playersLabel = `${players.length} / ${state.activeRoom.maxPlayers || 6}`;
 
@@ -100,6 +109,8 @@ export const renderRoomPanel = () => {
         <h4>${t('roomActions')}</h4>
         <div class="room-actions">
           ${canToggleReady ? `<button class="secondary" data-act="readyRoom">${(myParticipant?.ready ? t('markNotReady') : t('markReady'))}</button>` : ''}
+          ${isOwner ? `<button class="primary" data-act="startGame">${hasLiveMatch ? t('openActiveGame') : (state.activeMatch?.status === 'finished' ? t('gamePlayAgain') : t('startGame'))}</button>` : ''}
+          ${!isOwner && canOpenGame ? `<button class="secondary" data-act="openGame">${state.activeMatch?.status === 'finished' ? t('openMatchResults') : t('openActiveGame')}</button>` : ''}
           ${isOwner ? `<button class="secondary" data-act="openRoomSettings">${t('openRoomSettings')}</button>` : ''}
           <button class="chip" data-act="leaveRoom">${isOwner ? t('closeOwnedRoom') : t('leaveRoom')}</button>
         </div>

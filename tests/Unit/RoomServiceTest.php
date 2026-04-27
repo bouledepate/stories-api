@@ -20,10 +20,19 @@ use Stories\Application\Rooms\RegenerateInviteCode\RegenerateInviteCodeHandler;
 use Stories\Application\Rooms\Support\RoomUseCaseSupport;
 use Stories\Application\Rooms\TransferOwnership\TransferOwnershipHandler;
 use Stories\Application\Rooms\UpdateRoomSettings\UpdateRoomSettingsHandler;
+use Stories\Domain\Matches\Card\CharacterCardRegistry;
+use Stories\Infrastructure\Persistence\Matches\DbalMatchesRepository;
 use Stories\Infrastructure\Persistence\Rooms\DbalRoomBansRepository;
 use Stories\Infrastructure\Persistence\Rooms\DbalRoomParticipantsRepository;
 use Stories\Infrastructure\Persistence\Rooms\DbalRoomsRepository;
 use Stories\Infrastructure\Persistence\Rooms\DbalRoomSnapshotProvider;
+use Stories\Domain\Matches\Service\CharacterDeckFactory;
+use Stories\Domain\Matches\Service\CardEffectResolver;
+use Stories\Domain\Matches\Service\MatchEngine;
+use Stories\Domain\Matches\Service\PlayerEliminationService;
+use Stories\Domain\Matches\Service\RoundFinisher;
+use Stories\Domain\Matches\Service\RoundSetupFactory;
+use Stories\Domain\Matches\Service\TurnResolver;
 use Stories\Shared\Error\ApiException;
 use Stories\Shared\Error\ApiErrorCode;
 use Stories\Shared\Security\AuthenticatedUser;
@@ -39,15 +48,25 @@ final class RoomServiceTest extends TestCase
         $bans = new DbalRoomBansRepository($db);
         $snapshots = new DbalRoomSnapshotProvider($participants);
         $support = new RoomUseCaseSupport($rooms, $participants, $bans, $snapshots);
+        $matches = new DbalMatchesRepository($db);
+        $cards = new CharacterCardRegistry();
+        $deckFactory = new CharacterDeckFactory($cards);
+        $eliminations = new PlayerEliminationService();
+        $effectResolver = new CardEffectResolver($cards, $eliminations);
+        $engine = new MatchEngine(
+            new RoundSetupFactory($deckFactory),
+            new TurnResolver($effectResolver, $eliminations),
+            new RoundFinisher(),
+        );
 
-        $joinHandler = new JoinRoomHandler($rooms, $participants, $bans, $support);
+        $joinHandler = new JoinRoomHandler($rooms, $participants, $bans, $matches, $support);
 
         return [
             'create' => new CreateRoomHandler($rooms, $participants, $support),
             'join' => $joinHandler,
             'joinByCode' => new JoinByCodeHandler($rooms, $joinHandler),
             'listLobbies' => new ListLobbiesHandler($rooms),
-            'leave' => new LeaveRoomHandler($rooms, $participants, $support),
+            'leave' => new LeaveRoomHandler($rooms, $participants, $matches, $engine, $support),
             'ready' => new ReadyRoomHandler($participants, $support),
             'state' => new GetRoomStateHandler($support),
             'current' => new GetCurrentRoomHandler($rooms, $participants, $support),
@@ -117,7 +136,35 @@ final class RoomServiceTest extends TestCase
         }
     }
 
-    public function testOwnerLeaveClosesOwnedRoom(): void
+    public function testOwnerLeaveTransfersOwnershipWhenRoomHasParticipants(): void
+    {
+        $db = TestDatabase::create();
+        foreach ([['u1', 'owner'], ['u2', 'player']] as [$id, $username]) {
+            $db->insert('users', [
+                'id' => $id,
+                'username' => $username,
+                'password_hash' => 'x',
+                'role' => 'user',
+                'created_at' => gmdate(DATE_ATOM),
+            ]);
+        }
+
+        $handlers = $this->handlers($db);
+
+        $owner = new AuthenticatedUser('u1', 'owner', 'user');
+        $player = new AuthenticatedUser('u2', 'player', 'user');
+        $created = $handlers['create']->handle(new CreateRoomRequest('Room 1'), $owner)->toArray();
+        $roomId = (string) $created['roomId'];
+        $handlers['join']->handle($roomId, $player, false);
+
+        $handlers['leave']->handle($roomId, $owner);
+
+        $room = (new DbalRoomsRepository($db))->findById($roomId);
+        self::assertNotNull($room);
+        self::assertSame('u2', $room->ownerUserId);
+    }
+
+    public function testListLobbiesIncludesOwnerUsername(): void
     {
         $db = TestDatabase::create();
         $db->insert('users', [
@@ -129,14 +176,13 @@ final class RoomServiceTest extends TestCase
         ]);
 
         $handlers = $this->handlers($db);
-
         $owner = new AuthenticatedUser('u1', 'owner', 'user');
-        $created = $handlers['create']->handle(new CreateRoomRequest('Room 1'), $owner)->toArray();
-        $roomId = (string) $created['roomId'];
 
-        $handlers['leave']->handle($roomId, $owner);
+        $handlers['create']->handle(new CreateRoomRequest('Room 1'), $owner);
 
-        self::assertNull((new DbalRoomsRepository($db))->findById($roomId));
+        $result = $handlers['listLobbies']->handle('public', 'all', 10, 0)->toArray();
+
+        self::assertSame('owner', $result['items'][0]['ownerUsername'] ?? null);
     }
 
     public function testJoinSameRoomReturnsSnapshotWithoutChangingOwnerRole(): void
@@ -297,5 +343,32 @@ final class RoomServiceTest extends TestCase
         } catch (ApiException $exception) {
             self::assertSame(ApiErrorCode::SPECTATORS_CAN_ONLY_BE_KICKED, $exception->errorCode);
         }
+    }
+
+    public function testRoomWithOnlySpectatorsIsDeletedWhenOwnerLeaves(): void
+    {
+        $db = TestDatabase::create();
+        foreach ([['u1', 'owner'], ['u2', 'spectator']] as [$id, $username]) {
+            $db->insert('users', [
+                'id' => $id,
+                'username' => $username,
+                'password_hash' => 'x',
+                'role' => 'user',
+                'created_at' => gmdate(DATE_ATOM),
+            ]);
+        }
+
+        $handlers = $this->handlers($db);
+
+        $owner = new AuthenticatedUser('u1', 'owner', 'user');
+        $spectator = new AuthenticatedUser('u2', 'spectator', 'user');
+        $created = $handlers['create']->handle(new CreateRoomRequest('Room 1'), $owner)->toArray();
+        $roomId = (string) $created['roomId'];
+        $handlers['join']->handle($roomId, $spectator, true);
+
+        $handlers['leave']->handle($roomId, $owner);
+
+        $room = (new DbalRoomsRepository($db))->findById($roomId);
+        self::assertNull($room);
     }
 }

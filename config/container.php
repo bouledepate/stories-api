@@ -9,10 +9,14 @@ use Monolog\Level;
 use Monolog\Logger;
 use Psr\Log\LoggerInterface;
 use Stories\Domain\Auth\Repository\AuthUserRepository;
+use Stories\Domain\Matches\Repository\MatchesRepository;
+use Stories\Domain\Matches\Repository\RoomMatchPlayersProvider;
 use Stories\Domain\Rooms\Repository\RoomBansRepository;
 use Stories\Domain\Rooms\Repository\RoomParticipantsRepository;
 use Stories\Domain\Rooms\Repository\RoomsRepository;
 use Stories\Domain\Rooms\Repository\RoomSnapshotProvider;
+use Stories\Infrastructure\Persistence\Matches\DbalMatchesRepository;
+use Stories\Infrastructure\Persistence\Matches\DbalRoomMatchPlayersProvider;
 use Stories\Infrastructure\Persistence\Auth\DbalAuthUserRepository;
 use Stories\Infrastructure\Persistence\Rooms\DbalRoomBansRepository;
 use Stories\Infrastructure\Persistence\Rooms\DbalRoomParticipantsRepository;
@@ -40,6 +44,8 @@ return static function (array $env): ContainerBuilder {
         RoomParticipantsRepository::class => DI\autowire(DbalRoomParticipantsRepository::class),
         RoomBansRepository::class => DI\autowire(DbalRoomBansRepository::class),
         RoomSnapshotProvider::class => DI\autowire(DbalRoomSnapshotProvider::class),
+        MatchesRepository::class => DI\autowire(DbalMatchesRepository::class),
+        RoomMatchPlayersProvider::class => DI\autowire(DbalRoomMatchPlayersProvider::class),
         RedisConfig::class => static fn (): RedisConfig => RedisConfig::fromEnv($env),
         JwtService::class => static fn (): JwtService => new JwtService($jwtSecret),
         Validator::class => static fn (): Validator => new Validator(),

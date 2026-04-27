@@ -14,14 +14,13 @@ final class JoinByCodeRequest
     public function __construct(
         #[Required]
         #[StringValue]
-        #[Length(min: 6, max: 6)]
+        #[Length(exactly: 6)]
         public readonly string $inviteCode,
 
         public readonly bool $spectator = false,
 
-        #[StringValue]
         #[Length(min: 0, max: 128)]
-        public readonly ?string $password = null,
+        public readonly string $password = '',
     ) {
     }
 
@@ -33,7 +32,7 @@ final class JoinByCodeRequest
         return new self(
             strtoupper(trim((string) ($data['inviteCode'] ?? ''))),
             BooleanNormalizer::fromMixed($data['spectator'] ?? null, false),
-            $password === '' ? null : $password,
+            $password,
         );
     }
 }

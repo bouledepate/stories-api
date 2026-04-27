@@ -14,6 +14,19 @@ const persistRoomId = (roomId) => {
   clearPersistedRoomId();
 };
 
+const clearPersistedMatchId = () => {
+  storage.removeActiveMatchId();
+};
+
+const persistMatchId = (matchId) => {
+  if (matchId) {
+    storage.writeActiveMatchId(matchId);
+    return;
+  }
+
+  clearPersistedMatchId();
+};
+
 export const setToken = (token) => {
   state.token = token || '';
   if (state.token) {
@@ -103,6 +116,54 @@ export const setRoomChatInputShouldFocus = (value) => {
   state.roomChatInputShouldFocus = Boolean(value);
 };
 
+export const setGameStatusMessage = (message) => {
+  state.gameStatusMessage = message || '';
+};
+
+export const setGameChatOpen = (open) => {
+  state.gameChatOpen = Boolean(open);
+};
+
+export const setGameChatUnreadCount = (count) => {
+  state.gameChatUnreadCount = Math.max(0, Number(count || 0));
+};
+
+export const setGameCardPreview = (preview) => {
+  state.gameCardPreview = preview || null;
+};
+
+export const setGameCardPlayPrompt = (prompt) => {
+  state.gameCardPlayPrompt = prompt || null;
+};
+
+export const patchGameCardPlayPrompt = (patch) => {
+  if (!state.gameCardPlayPrompt) return;
+  state.gameCardPlayPrompt = {
+    ...state.gameCardPlayPrompt,
+    ...(patch || {}),
+  };
+};
+
+export const incrementGameChatUnreadCount = () => {
+  state.gameChatUnreadCount = Math.max(0, Number(state.gameChatUnreadCount || 0) + 1);
+};
+
+export const appendGameEventLog = (entry) => {
+  state.gameEventLog = [
+    ...state.gameEventLog,
+    {
+      timestamp: Date.now(),
+      ...entry,
+    },
+  ].slice(-120);
+  storage.writeGameEventLog(state.activeMatch?.matchId || '', state.gameEventLog);
+};
+
+export const resetGameEventLog = () => {
+  storage.removeGameEventLog(state.activeMatch?.matchId || '');
+  state.gameEventLog = [];
+};
+
 export const appendRoomChatMessage = (message) => {
   state.roomChatMessages = [
     ...state.roomChatMessages,
@@ -111,14 +172,22 @@ export const appendRoomChatMessage = (message) => {
       ...message,
     },
   ].slice(-100);
+  storage.writeRoomChatMessages(state.activeRoom?.roomId || '', state.roomChatMessages);
+};
+
+export const setRoomChatMessages = (messages) => {
+  state.roomChatMessages = Array.isArray(messages) ? messages.slice(-100) : [];
+  storage.writeRoomChatMessages(state.activeRoom?.roomId || '', state.roomChatMessages);
 };
 
 export const resetRoomChatMessages = () => {
+  storage.removeRoomChatMessages(state.activeRoom?.roomId || '');
   state.roomChatMessages = [];
 };
 
 export const setActiveRoom = (room, { persist = true } = {}) => {
   state.activeRoom = room || null;
+  state.roomChatMessages = storage.readRoomChatMessages(room?.roomId || '');
   if (persist) {
     persistRoomId(room?.roomId || '');
   }
@@ -126,7 +195,22 @@ export const setActiveRoom = (room, { persist = true } = {}) => {
 
 export const clearActiveRoom = () => {
   state.activeRoom = null;
+  state.roomChatMessages = [];
   clearPersistedRoomId();
+};
+
+export const setActiveMatch = (match, { persist = true } = {}) => {
+  state.activeMatch = match || null;
+  state.gameEventLog = storage.readGameEventLog(match?.matchId || '');
+  if (persist) {
+    persistMatchId(match?.matchId || '');
+  }
+};
+
+export const clearActiveMatch = () => {
+  state.activeMatch = null;
+  state.gameEventLog = [];
+  clearPersistedMatchId();
 };
 
 export const setJoinLobbyModalState = ({
@@ -136,6 +220,7 @@ export const setJoinLobbyModalState = ({
   roomName,
   needsPassword,
   password,
+  spectator,
 } = {}) => {
   if (open !== undefined) {
     state.joinLobbyModalOpen = Boolean(open);
@@ -155,6 +240,9 @@ export const setJoinLobbyModalState = ({
   if (password !== undefined) {
     state.joinLobbyPassword = password;
   }
+  if (spectator !== undefined) {
+    state.joinLobbySpectator = Boolean(spectator);
+  }
 };
 
 export const resetJoinLobbyModalState = () => {
@@ -165,6 +253,7 @@ export const resetJoinLobbyModalState = () => {
     roomName: '',
     needsPassword: false,
     password: '',
+    spectator: false,
   });
 };
 
@@ -201,7 +290,13 @@ export const clearSessionState = () => {
   setToken('');
   setUser(null);
   clearActiveRoom();
+  clearActiveMatch();
   setAuthModalState({ open: false });
   setRoomNoticeMessage('');
+  setGameChatOpen(false);
+  setGameChatUnreadCount(0);
+  setGameCardPreview(null);
+  resetGameEventLog();
+  setGameStatusMessage('');
   resetRoomSwitchPromptState();
 };

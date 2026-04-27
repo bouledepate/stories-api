@@ -183,6 +183,18 @@ final class DbalRoomsRepository implements RoomsRepository
         ]);
     }
 
+    public function updateStatus(string $roomId, string $status): void
+    {
+        $this->db->update('rooms', [
+            'status' => $status,
+        ], [
+            'id' => $roomId,
+        ], [
+            'status' => ParameterType::STRING,
+            'id' => ParameterType::STRING,
+        ]);
+    }
+
     public function listLobbies(string $visibility, string $passwordFilter, int $limit, int $offset): array
     {
         if ($visibility === 'private') {
@@ -197,14 +209,16 @@ final class DbalRoomsRepository implements RoomsRepository
                 'r.is_public',
                 'r.max_players',
                 'r.owner_user_id',
+                'owner.username AS owner_username',
                 'r.invite_code',
                 'r.created_at',
                 'r.password_hash',
                 "COALESCE(SUM(CASE WHEN rp.role <> 'spectator' THEN 1 ELSE 0 END), 0) AS players_count"
             )
             ->from('rooms', 'r')
+            ->innerJoin('r', 'users', 'owner', 'owner.id = r.owner_user_id')
             ->leftJoin('r', 'room_participants', 'rp', 'rp.room_id = r.id')
-            ->groupBy('r.id', 'r.name', 'r.status', 'r.is_public', 'r.max_players', 'r.owner_user_id', 'r.invite_code', 'r.created_at', 'r.password_hash')
+            ->groupBy('r.id', 'r.name', 'r.status', 'r.is_public', 'r.max_players', 'r.owner_user_id', 'owner.username', 'r.invite_code', 'r.created_at', 'r.password_hash')
             ->orderBy('r.created_at', 'DESC')
             ->setMaxResults($limit)
             ->setFirstResult($offset);
@@ -226,6 +240,7 @@ final class DbalRoomsRepository implements RoomsRepository
             'isPublic' => BooleanNormalizer::fromMixed($row['is_public'] ?? null, true),
             'maxPlayers' => (int) ($row['max_players'] ?? 6),
             'ownerUserId' => (string) $row['owner_user_id'],
+            'ownerUsername' => (string) ($row['owner_username'] ?? ''),
             'hasPassword' => !empty($row['password_hash']),
             'playersCount' => (int) $row['players_count'],
             'inviteCode' => (string) $row['invite_code'],

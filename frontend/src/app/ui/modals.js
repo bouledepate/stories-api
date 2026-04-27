@@ -135,6 +135,7 @@ export const renderJoinLobbyModal = () => {
       <article class="auth-card">
         <div class="stack">
           ${state.joinLobbyNeedsPassword ? `<input id="lobbyJoinPassword" placeholder="${t('roomPasswordOptional')}" type="password" />` : ''}
+          <label><input id="lobbyJoinAsSpectator" type="checkbox" ${state.joinLobbySpectator ? 'checked' : ''} /> ${t('spectator')}</label>
           <button class="primary" data-act="confirmJoinLobby">${t('connect')}</button>
         </div>
       </article>

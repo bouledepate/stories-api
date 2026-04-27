@@ -2,10 +2,12 @@ import { callApi } from '../../api';
 import { t } from '../../i18n';
 import { safeTextValue } from '../../security';
 import { state } from '../../state';
+import { loadLobbies } from '../../bootstrap/session';
 import { clearFieldError, markFieldError, setStatus, showApiError, showToast } from '../../services/feedback';
 import { emitLobbiesChanged, sendSocketMessage, subscribeRoomSocket } from '../../services/socket';
 import {
   appendRoomChatMessage,
+  clearActiveMatch,
   clearActiveRoom,
   resetJoinLobbyModalState,
   resetRoomChatMessages,
@@ -14,6 +16,7 @@ import {
   setActiveTab,
   setHomeStatusMessage,
   setJoinLobbyModalState,
+  setRoomChatMessages,
   setRoomChatInputShouldFocus,
   setRoomModalState,
   setRoomNoticeMessage,
@@ -24,8 +27,40 @@ import {
 } from '../../store/mutations';
 import { getMyParticipant, isRoomOwner, isSameActiveRoom } from '../../store/selectors';
 import { openAuth } from '../common/ui-state';
+import { activateMatch, fetchAndActivateMatch, fetchRoomMatch, shouldOpenMatchView, startMatchFromRoom } from '../game/game-flow';
 
 export const pushRoomChatMessage = (message) => {
+  appendRoomChatMessage(message);
+};
+
+const collapseTransientPresencePair = (event, payload, message) => {
+  const messages = Array.isArray(state.roomChatMessages) ? state.roomChatMessages : [];
+  const last = messages[messages.length - 1] || null;
+  if (
+    !last
+    || last.role !== 'system'
+    || message.role !== 'system'
+    || typeof last.text !== 'string'
+    || typeof message.text !== 'string'
+    || Math.abs(Number(message.timestamp || 0) - Number(last.timestamp || 0)) > 8000
+  ) {
+    appendRoomChatMessage(message);
+    return;
+  }
+
+  const presenceUsername = payload?.username || t('systemUnknownUser');
+  const joinedText = t('systemJoinedRoom', { username: presenceUsername });
+  const leftText = t('systemLeftRoom', { username: presenceUsername });
+  const isOppositePresencePair = (
+    (last.text === joinedText && message.text === leftText)
+    || (last.text === leftText && message.text === joinedText)
+  );
+
+  if (isOppositePresencePair) {
+    setRoomChatMessages(messages.slice(0, -1));
+    return;
+  }
+
   appendRoomChatMessage(message);
 };
 
@@ -50,21 +85,30 @@ export const systemPresenceText = (payload) => {
 };
 
 export const pushSystemRoomEvent = (event, payload = {}) => {
-  pushRoomChatMessage({
+  const message = {
     username: t('roleSystem'),
     role: 'system',
     text: systemPresenceText({ event, ...payload }),
     timestamp: payload?.timestamp || Date.now(),
-  });
+  };
+
+  if (event === 'joined' || event === 'left') {
+    collapseTransientPresencePair(event, payload, message);
+    return;
+  }
+
+  appendRoomChatMessage(message);
 };
 
 export const clearActiveRoomState = () => {
   clearActiveRoom();
+  clearActiveMatch();
   setRoomStatusMessage('');
   setRoomSettingsOpen(false);
 };
 
 export const activateRoomState = (room, { resetChat = true } = {}) => {
+  clearActiveMatch();
   setActiveRoom(room);
   subscribeRoomSocket(room.roomId);
   if (resetChat) {
@@ -116,6 +160,7 @@ export const openJoinLobbyModal = (render, { roomId, roomName, ownerUserId, need
     roomName,
     ownerUserId,
     needsPassword,
+    spectator: false,
   });
   render();
 };
@@ -129,14 +174,25 @@ export const leaveCurrentRoom = async () => {
   if (!state.activeRoom?.roomId) return;
 
   const roomId = state.activeRoom.roomId;
+  const matchId = state.activeMatch?.matchId || null;
   await callApi(`/rooms/${encodeURIComponent(roomId)}/leave`, {
     method: 'POST',
   });
+  if (matchId) {
+    sendSocketMessage({
+      type: 'room_event',
+      roomId,
+      event: 'match_state_updated',
+      data: { matchId },
+    });
+  }
   clearActiveRoomState();
-  emitLobbiesChanged('room_left', { roomId });
+  emitLobbiesChanged('room_left', { roomId, ...(matchId ? { matchId } : {}) });
+  await loadLobbies('home', 4, state.lobbyFilters.password);
+  await loadLobbies('catalog', state.lobbyFilters.limit, state.lobbyFilters.password);
 };
 
-export const executeJoinLobbyRequest = async (render, roomId, ownerUserId, password = '', statusId = 'homeStatus') => {
+export const executeJoinLobbyRequest = async (render, roomId, ownerUserId, password = '', spectator = false, statusId = 'homeStatus') => {
   try {
     if (isSameActiveRoom(roomId)) {
       returnToCurrentRoom(render);
@@ -147,13 +203,23 @@ export const executeJoinLobbyRequest = async (render, roomId, ownerUserId, passw
       const room = await callApi(`/rooms/${encodeURIComponent(roomId)}`);
       activateRoomState(room, { resetChat: false });
     } else {
-      const payload = { spectator: false };
+      const payload = { spectator: Boolean(spectator) };
       if (password.trim() !== '') payload.password = password.trim();
       const room = await callApi(`/rooms/${encodeURIComponent(roomId)}/join`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
       activateRoomState(room);
+    }
+    const roomMatch = await fetchRoomMatch(state.activeRoom.roomId).catch(() => null);
+    if (roomMatch?.matchId) {
+      activateMatch(roomMatch, { withTab: true });
+      if (!shouldOpenMatchView(roomMatch)) {
+        setActiveTab('roomManage');
+      }
+    } else {
+      clearActiveMatch();
+      setActiveTab('roomManage');
     }
     emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId });
     setStatus(statusId, `${t('roomJoinSuccess')} ${state.activeRoom.roomId}`, true);
@@ -176,6 +242,16 @@ export const executeJoinByCodeRequest = async (render, inviteCode, password, spe
       body: JSON.stringify(payload),
     });
     activateRoomState(room);
+    const roomMatch = await fetchRoomMatch(state.activeRoom.roomId).catch(() => null);
+    if (roomMatch?.matchId) {
+      activateMatch(roomMatch, { withTab: true });
+      if (!shouldOpenMatchView(roomMatch)) {
+        setActiveTab('roomManage');
+      }
+    } else {
+      clearActiveMatch();
+      setActiveTab('roomManage');
+    }
     emitLobbiesChanged('room_joined', { roomId: state.activeRoom.roomId });
     setRoomModalState({ open: false });
     setHomeStatusMessage(`${t('roomJoinSuccess')} ${state.activeRoom.roomId}`);
@@ -194,7 +270,14 @@ export const runPendingJoinAction = async (render) => {
 
   closeRoomSwitchPrompt(render, false);
   if (pending.kind === 'lobby') {
-    const ok = await executeJoinLobbyRequest(render, pending.roomId, pending.ownerUserId, pending.password || '', 'joinLobbyStatus');
+    const ok = await executeJoinLobbyRequest(
+      render,
+      pending.roomId,
+      pending.ownerUserId,
+      pending.password || '',
+      Boolean(pending.spectator),
+      'joinLobbyStatus'
+    );
     if (ok) {
       resetJoinLobbyModalState();
     }
@@ -291,12 +374,20 @@ export const bindRoomModalEvents = (render) => {
 export const bindHomeEvents = (render) => {
   const hydrateActiveRoom = async () => {
     if (!state.activeRoom?.roomId) return;
-    if (state.activeRoom.ownerId && state.activeRoom.inviteCode) return;
+    if (state.activeRoom.ownerId && state.activeRoom.inviteCode && state.activeMatch?.matchId) return;
 
     try {
-      setActiveRoom(await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}`));
-      setSuppressOwnJoinPresence(true);
-      render();
+      if (!state.activeRoom.ownerId || !state.activeRoom.inviteCode) {
+        setActiveRoom(await callApi(`/rooms/${encodeURIComponent(state.activeRoom.roomId)}`));
+        setSuppressOwnJoinPresence(true);
+      }
+      const match = await fetchRoomMatch(state.activeRoom.roomId).catch(() => null);
+      if (match?.matchId) {
+        activateMatch(match, { withTab: true, keepViewTab: state.activeTab === 'game' });
+        render();
+        return;
+      }
+      clearActiveMatch();
     } catch (e) {
       showApiError('homeStatus', e);
     }
@@ -362,6 +453,28 @@ export const bindHomeEvents = (render) => {
 
   document.querySelector('[data-act="openRoomSettings"]')?.addEventListener('click', () => {
     setRoomSettingsOpen(true);
+    render();
+  });
+
+  document.querySelector('[data-act="startGame"]')?.addEventListener('click', async () => {
+    if (state.activeMatch?.matchId && state.activeMatch.status !== 'finished') {
+      await fetchAndActivateMatch(state.activeMatch.matchId, render, { withTab: true, forceViewTab: true });
+      return;
+    }
+    const participants = Array.isArray(state.activeRoom?.participants) ? state.activeRoom.participants : [];
+    const players = participants.filter((participant) => participant.role !== 'spectator');
+    const allPlayersReady = players.length >= 2 && players.every((participant) => participant.ready === true);
+    if (!allPlayersReady) {
+      showToast(t('allPlayersMustReadyHint'));
+      return;
+    }
+    await startMatchFromRoom(render);
+  });
+
+  document.querySelector('[data-act="openGame"]')?.addEventListener('click', async () => {
+    const match = await fetchRoomMatch(state.activeRoom?.roomId || '').catch(() => null);
+    if (!match?.matchId) return;
+    activateMatch(match, { withTab: true, forceViewTab: true, keepViewTab: true });
     render();
   });
 };

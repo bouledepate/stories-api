@@ -28,6 +28,8 @@ interface RoomsRepository
 
     public function transferOwnership(string $roomId, string $currentOwnerId, string $targetUserId): void;
 
+    public function updateStatus(string $roomId, string $status): void;
+
     /** @return list<array<string, mixed>> */
     public function listLobbies(string $visibility, string $passwordFilter, int $limit, int $offset): array;
 }

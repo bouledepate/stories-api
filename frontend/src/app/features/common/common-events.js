@@ -107,6 +107,7 @@ export const bindCommonEvents = (render) => {
     if (!state.joinLobbyRoomId) return;
     clearFieldError('#lobbyJoinPassword');
     const password = safeTextValue('#lobbyJoinPassword', 128);
+    const spectator = Boolean(document.querySelector('#lobbyJoinAsSpectator')?.checked);
     if (state.joinLobbyNeedsPassword && password === '') {
       markFieldError('#lobbyJoinPassword', t('requiredField'));
       setStatus('joinLobbyStatus', t('requiredField'));
@@ -118,11 +119,19 @@ export const bindCommonEvents = (render) => {
         roomId: state.joinLobbyRoomId,
         ownerUserId: state.joinLobbyOwnerUserId,
         password,
+        spectator,
         targetLabel: state.joinLobbyRoomName || state.joinLobbyRoomId,
       });
       return;
     }
-    const ok = await executeJoinLobbyRequest(render, state.joinLobbyRoomId, state.joinLobbyOwnerUserId, password, 'joinLobbyStatus');
+    const ok = await executeJoinLobbyRequest(
+      render,
+      state.joinLobbyRoomId,
+      state.joinLobbyOwnerUserId,
+      password,
+      spectator,
+      'joinLobbyStatus'
+    );
     if (ok) closeJoinLobbyModal(render);
   });
 

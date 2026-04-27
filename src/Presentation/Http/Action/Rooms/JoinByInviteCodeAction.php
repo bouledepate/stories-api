@@ -36,7 +36,7 @@ final class JoinByInviteCodeAction extends JsonAction
                 $dto->inviteCode,
                 $this->auth->user($request),
                 $dto->spectator,
-                $dto->password,
+                $dto->password !== '' ? $dto->password : null,
             )->toArray());
         } catch (InvalidArgumentException|RuntimeException $exception) {
             return $this->responder->respondError($request, $response, $exception, 400);

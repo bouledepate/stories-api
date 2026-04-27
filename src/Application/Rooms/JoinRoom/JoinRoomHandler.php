@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Stories\Application\Rooms\JoinRoom;
 
+use Stories\Domain\Matches\Model\MatchStatus;
+use Stories\Domain\Matches\Repository\MatchesRepository;
 use Stories\Application\Rooms\Support\RoomUseCaseSupport;
 use Stories\Domain\Rooms\Repository\RoomBansRepository;
 use Stories\Domain\Rooms\Repository\RoomParticipantsRepository;
@@ -18,6 +20,7 @@ final class JoinRoomHandler
         private readonly RoomsRepository $rooms,
         private readonly RoomParticipantsRepository $participants,
         private readonly RoomBansRepository $bans,
+        private readonly MatchesRepository $matches,
         private readonly RoomUseCaseSupport $support,
     ) {
     }
@@ -43,11 +46,15 @@ final class JoinRoomHandler
 
         $this->support->guardPassword($room, $password);
 
-        if (!$spectator && $this->participants->countPlayers($roomId) >= $room->maxPlayers) {
+        $activeMatch = $this->matches->findByRoomId($roomId);
+        $forceSpectator = $activeMatch !== null && $activeMatch->status !== MatchStatus::FINISHED;
+        $joinAsSpectator = $spectator || $forceSpectator;
+
+        if (!$joinAsSpectator && $this->participants->countPlayers($roomId) >= $room->maxPlayers) {
             throw new ApiException(ApiErrorCode::ROOM_IS_FULL);
         }
 
-        $this->participants->upsertParticipant($roomId, $actor->id, $spectator ? 'spectator' : 'player');
+        $this->participants->upsertParticipant($roomId, $actor->id, $joinAsSpectator ? 'spectator' : 'player');
 
         return $this->support->snapshot($roomId, $actor->id);
     }

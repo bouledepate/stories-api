@@ -1,6 +1,7 @@
 import {
   bindAuthEvents,
   bindCommonEvents,
+  bindGameEvents,
   bindHomeEvents,
   bindLobbyEvents,
   bindProfileEvents,
@@ -22,6 +23,7 @@ export const createRenderer = (app, loadMe, syncMyRooms) => {
     if (state.activeTab === 'lobbies') bindLobbyEvents(render);
     if (state.activeTab === 'profile') bindProfileEvents(render);
     if (state.activeTab === 'roomManage') bindRoomManagePageEvents(render);
+    if (state.activeTab === 'game') bindGameEvents(render);
     if (state.authOpen && !state.user) bindAuthEvents(render, loadMe);
 
     if (state.roomChatInputShouldFocus && state.activeTab === 'roomManage') {

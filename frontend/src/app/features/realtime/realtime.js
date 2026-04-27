@@ -3,8 +3,10 @@ import { t } from '../../i18n';
 import { state } from '../../state';
 import { showToast } from '../../services/feedback';
 import {
+  incrementGameChatUnreadCount,
   setActiveRoom,
   setActiveTab,
+  setActiveMatch,
   setRoomNoticeMessage,
   setSocket,
   setSuppressOwnJoinPresence,
@@ -12,11 +14,10 @@ import {
 import { sendSocketMessage, subscribeRoomSocket } from '../../services/socket';
 import {
   clearActiveRoomState,
-  pushRoomChatMessage,
   pushSystemRoomEvent,
   syncChatScroll,
-  systemPresenceText,
 } from '../rooms/room-flow';
+import { canViewMatchAsSpectator, fetchAndActivateMatch, syncGameChatScroll } from '../game/game-flow';
 
 export const ensureLobbyRealtime = (refreshLobbies, render) => {
   if (state.socket?.readyState === WebSocket.OPEN || state.socket?.readyState === WebSocket.CONNECTING) return;
@@ -42,6 +43,7 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
       await refreshLobbies();
 
       const changedRoomId = payload?.data?.roomId;
+      const changedMatchId = payload?.data?.matchId;
       const changedUserId = payload?.data?.userId;
       const changedUsername = payload?.data?.username || payload?.username || t('systemUnknownUser');
       if (
@@ -62,6 +64,20 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
       }
 
       if (changedRoomId && state.activeRoom?.roomId === changedRoomId) {
+        if (payload?.event === 'room_left' && state.activeMatch?.matchId) {
+          await fetchAndActivateMatch(state.activeMatch.matchId, render, {
+            withTab: state.activeTab === 'game',
+            forceViewTab: state.activeTab === 'game' && canViewMatchAsSpectator(),
+            keepViewTab: state.activeTab === 'game',
+          });
+        }
+        if (payload?.event === 'room_match_started' && changedMatchId) {
+          const match = await fetchAndActivateMatch(changedMatchId, render, { withTab: true });
+          if (match?.matchId && state.activeTab === 'game' && match.status === 'finished') {
+            setActiveTab('roomManage');
+          }
+          return;
+        }
         if (
           payload?.event === 'room_settings_updated'
           || payload?.event === 'room_ownership_transferred'
@@ -86,13 +102,28 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
         }
       }
 
-      if (state.activeTab === 'home' || state.activeTab === 'lobbies' || state.activeTab === 'profile' || state.activeTab === 'roomManage') {
+      if (state.activeTab === 'home' || state.activeTab === 'lobbies' || state.activeTab === 'profile' || state.activeTab === 'roomManage' || state.activeTab === 'game') {
         render();
       }
       return;
     }
 
     if (payload?.type === 'room_event' && payload?.roomId && state.activeRoom?.roomId === payload.roomId) {
+      if (payload?.event === 'match_state_updated') {
+        const matchId = payload?.data?.matchId || state.activeMatch?.matchId;
+        if (matchId) {
+          const match = await fetchAndActivateMatch(matchId, render, {
+            withTab: state.activeTab === 'game',
+            forceViewTab: state.activeTab === 'game' && canViewMatchAsSpectator(),
+            keepViewTab: state.activeTab === 'game',
+          });
+          if (match?.matchId) {
+            setActiveMatch(match);
+          }
+        }
+        return;
+      }
+
       if (payload?.event === 'access_denied') {
         clearActiveRoomState();
         setActiveTab('home');
@@ -105,6 +136,7 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
       }
 
       if (payload?.event === 'chat_message' && payload?.data?.text) {
+        const isOwnMessage = Boolean(payload?.userId && state.user?.id && payload.userId === state.user.id);
         pushRoomChatMessage({
           username: payload?.data?.username || payload?.username || 'user',
           role: payload?.data?.role || 'player',
@@ -112,9 +144,19 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
           text: payload?.data?.text || '',
           timestamp: payload?.timestamp,
         });
-        if (state.activeTab === 'roomManage') {
+        if (state.activeTab === 'roomManage' || state.activeTab === 'game') {
           render();
-          syncChatScroll();
+          if (state.activeTab === 'roomManage') {
+            syncChatScroll();
+          }
+          if (state.activeTab === 'game') {
+            if (state.gameChatOpen) {
+              syncGameChatScroll();
+            } else if (!isOwnMessage) {
+              incrementGameChatUnreadCount();
+              showToast(t('newChatMessageNotice'), 'ok');
+            }
+          }
         }
         return;
       }
@@ -136,15 +178,22 @@ export const ensureLobbyRealtime = (refreshLobbies, render) => {
         setSuppressOwnJoinPresence(false);
         return;
       }
-      pushRoomChatMessage({
-        username: t('roleSystem'),
-        role: 'system',
-        text: systemPresenceText(payload),
+      pushSystemRoomEvent(payload?.event || '', {
+        username: payload?.username || t('systemUnknownUser'),
         timestamp: payload?.timestamp,
       });
-      if (state.activeTab === 'roomManage') {
+      if (state.activeTab === 'roomManage' || state.activeTab === 'game') {
         render();
-        syncChatScroll();
+        if (state.activeTab === 'roomManage') {
+          syncChatScroll();
+        }
+        if (state.activeTab === 'game') {
+          if (state.gameChatOpen) {
+            syncGameChatScroll();
+          } else {
+            incrementGameChatUnreadCount();
+          }
+        }
       }
     }
   };

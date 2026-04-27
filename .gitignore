@@ -1,4 +1,22 @@
 /vendor/
 /.phpunit.cache/
+.phpunit.result.cache
 .env
 /var/*.sqlite
+/var/logs/
+
+# IDE
+/.idea/
+/.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.vite/
+
+# Logs
+*.log
