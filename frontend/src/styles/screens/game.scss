@@ -122,6 +122,69 @@
   text-decoration: line-through;
 }
 
+.game-decree-choice {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(2, 8, 22, .7);
+  backdrop-filter: blur(10px);
+}
+
+.game-decree-choice-card {
+  width: min(760px, 100%);
+  border: 1px solid rgba(255, 211, 154, .28);
+  border-radius: 24px;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 211, 154, .12), transparent 34%),
+    linear-gradient(145deg, rgba(11, 18, 42, .98), rgba(34, 21, 54, .96));
+  box-shadow: 0 26px 80px rgba(0, 0, 0, .45);
+}
+
+.game-decree-choice-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.game-decree-choice-option {
+  min-height: 150px;
+  border: 1px solid rgba(255, 211, 154, .32);
+  border-radius: 18px;
+  padding: 16px;
+  text-align: left;
+  color: var(--text);
+  background: rgba(55, 37, 78, .58);
+  cursor: pointer;
+  transition: transform .16s ease, border-color .16s ease, background .16s ease;
+}
+
+.game-decree-choice-option:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: rgba(255, 211, 154, .64);
+  background: rgba(72, 48, 100, .72);
+}
+
+.game-decree-choice-option:disabled {
+  cursor: wait;
+  opacity: .62;
+}
+
+.game-decree-choice-option strong,
+.game-decree-choice-option span {
+  display: block;
+}
+
+.game-decree-choice-option span {
+  margin-top: 10px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .game-events {
   max-height: 230px;
   overflow: auto;
@@ -263,6 +326,19 @@
 
 .game-revealed-rail .discard-stack-card {
   margin-left: 0;
+}
+
+.removed-decree-card-wrap {
+  display: grid;
+  gap: 5px;
+  justify-items: center;
+}
+
+.removed-decree-card-label {
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(255, 211, 154, .82);
 }
 
 .game-revealed-rail::before {
@@ -446,7 +522,8 @@
 .game-card-play-prompt-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 8px;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .game-card-play-prompt-grid.cards {
@@ -457,7 +534,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 8px;
   min-height: 62px;
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -466,6 +543,10 @@
   color: var(--text);
   text-align: left;
   transition: border-color .18s ease, transform .18s ease, background .18s ease;
+}
+
+.game-prompt-option span {
+  line-height: 1.35;
 }
 
 .game-prompt-option:hover {
@@ -838,6 +919,13 @@
   border-color: rgba(255, 167, 113, .62);
   background: linear-gradient(160deg, rgba(90, 56, 42, .96), rgba(43, 24, 22, .95));
   box-shadow: inset 0 0 0 1px rgba(255, 167, 113, .16);
+}
+
+.game-card-button.decree-forbidden {
+  border-color: rgba(255, 211, 154, .58);
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 211, 154, .08) 0 8px, transparent 8px 16px),
+    linear-gradient(160deg, rgba(76, 54, 99, .96), rgba(42, 28, 56, .95));
 }
 
 .game-card-value {

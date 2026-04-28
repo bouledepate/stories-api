@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stories\Domain\Matches\Service;
 
+use Stories\Domain\Matches\Decree\DecreeRegistry;
 use Stories\Domain\Matches\Model\MatchState;
 use Stories\Domain\Matches\Model\MatchStatus;
 use Stories\Domain\Matches\Model\RoundFinishedReason;
@@ -16,6 +17,10 @@ use Stories\Shared\Error\ApiException;
 
 final class RoundFinisher
 {
+    public function __construct(private readonly DecreeRegistry $decrees)
+    {
+    }
+
     public function shouldFinishRound(RoundState $round): bool
     {
         if ($round->hasPendingDecision()) {
@@ -51,6 +56,7 @@ final class RoundFinisher
 
         $winnerIds = $this->resolveRoundWinners($alive);
         $this->awardRoundPoints($match, $winnerIds);
+        $this->awardDecreeEndRoundBonuses($match, $round);
         $finishedReason = count($winnerIds) > 1 ? RoundFinishedReason::TIE : RoundFinishedReason::SINGLE_WINNER;
         $round->moveToFinished($finishedReason, $winnerIds);
         $match->currentRound = $round;
@@ -77,12 +83,34 @@ final class RoundFinisher
 
             $alive[] = new RoundStanding(
                 $player->userId,
-                $state->handValue(),
+                $this->showdownHandValue($match, $round, $state),
                 $state->discardValueSum(),
             );
         }
 
         return $alive;
+    }
+
+    private function showdownHandValue(MatchState $match, RoundState $round, RoundPlayerState $state): int
+    {
+        $handValue = $state->handValue();
+        foreach ($state->hand as $card) {
+            $activeDecree = $match->activeDecreeForCard($card->code, $round);
+            if ($activeDecree === null) {
+                continue;
+            }
+
+            $handValue = $this->decrees->require($activeDecree->code)->showdownHandValue($state, $handValue);
+        }
+
+        return $handValue;
+    }
+
+    private function awardDecreeEndRoundBonuses(MatchState $match, RoundState $round): void
+    {
+        foreach ($match->unsuppressedDecrees($round) as $activeDecree) {
+            $this->decrees->require($activeDecree->code)->awardEndRoundBonuses($match, $round);
+        }
     }
 
     /**

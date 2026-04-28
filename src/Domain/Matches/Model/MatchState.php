@@ -13,6 +13,7 @@ final class MatchState
      * @param list<MatchPlayer> $players
      * @param list<ActiveDecree> $activeDecrees
      * @param list<string> $decreeDeckCodes
+     * @param list<string> $decreeDiscardCodes
      */
     public function __construct(
         public string $id,
@@ -28,6 +29,9 @@ final class MatchState
         public string $updatedAt,
         public array $activeDecrees = [],
         public array $decreeDeckCodes = [],
+        public array $decreeDiscardCodes = [],
+        public ?PendingDecreeChoice $pendingDecreeChoice = null,
+        public int $decreeRotationRoundNumber = 0,
     ) {
     }
 
@@ -53,6 +57,11 @@ final class MatchState
             static fn (mixed $item): string => (string) $item,
             (array) ($state['decreeDeckCodes'] ?? [])
         ));
+        $decreeDiscardCodes = array_values(array_map(
+            static fn (mixed $item): string => (string) $item,
+            (array) ($state['decreeDiscardCodes'] ?? [])
+        ));
+        $pendingDecreeChoiceData = $state['pendingDecreeChoice'] ?? null;
 
         return new self(
             (string) ($state['id'] ?? ''),
@@ -70,6 +79,9 @@ final class MatchState
             (string) ($state['updatedAt'] ?? gmdate(DATE_ATOM)),
             $activeDecrees,
             $decreeDeckCodes,
+            $decreeDiscardCodes,
+            is_array($pendingDecreeChoiceData) ? PendingDecreeChoice::fromArray($pendingDecreeChoiceData) : null,
+            (int) ($state['decreeRotationRoundNumber'] ?? 0),
         );
     }
 
@@ -177,6 +189,9 @@ final class MatchState
             'lastRoundSummary' => $this->lastRoundSummary?->toArray(),
             'activeDecrees' => array_map(static fn (ActiveDecree $decree): array => $decree->toArray(), $this->activeDecrees),
             'decreeDeckCodes' => array_values($this->decreeDeckCodes),
+            'decreeDiscardCodes' => array_values($this->decreeDiscardCodes),
+            'pendingDecreeChoice' => $this->pendingDecreeChoice?->toArray(),
+            'decreeRotationRoundNumber' => $this->decreeRotationRoundNumber,
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
         ];

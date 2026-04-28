@@ -5,7 +5,7 @@ import { getTargetableMatchPlayers, isMyTurnInMatch } from '../../store/selector
 import { patchGameCardPlayPrompt, setActiveTab, setGameCardPlayPrompt, setGameCardPreview, setGameChatOpen, setGameChatUnreadCount, setGameConfirmPrompt } from '../../store/mutations';
 import { matchCardCatalog } from './card-catalog';
 import { getGameCardActionConfig, isInteractiveMatchCard } from './game-action-config';
-import { leaveFinishedMatchRoom, leaveGameAndRoom, playMatchCard, sendGameChatMessage, startMatchFromRoom, syncGameChatScroll } from './game-flow';
+import { chooseMatchDecree, leaveFinishedMatchRoom, leaveGameAndRoom, playMatchCard, sendGameChatMessage, startMatchFromRoom, syncGameChatScroll } from './game-flow';
 import { isFreeInterrogationActive } from './game-ui-model';
 
 export const bindGameEvents = (render) => {
@@ -102,6 +102,12 @@ export const bindGameEvents = (render) => {
     render();
   });
 
+  document.querySelectorAll('[data-act="chooseDecree"]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await chooseMatchDecree(render, button.dataset.decreeCode || '', button.dataset.replaceDecreeCode || '');
+    });
+  });
+
   document.querySelectorAll('[data-act="playCard"]').forEach((button) => {
     button.addEventListener('click', async () => {
       if (!isMyTurnInMatch()) {
@@ -110,7 +116,7 @@ export const bindGameEvents = (render) => {
       }
 
       if (button.dataset.cardLocked === 'true') {
-        showToast(t('cardPlayBlocked'));
+        showToast(button.dataset.cardDecreeForbidden === 'true' ? t('cardPlayForbiddenByDecree') : t('cardPlayBlocked'));
         return;
       }
 

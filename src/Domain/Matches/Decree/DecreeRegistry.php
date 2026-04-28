@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Stories\Domain\Matches\Decree;
 
+use Stories\Domain\Matches\Decree\Guard\GuardFreeInterrogationDecree;
+use Stories\Domain\Matches\Decree\Guard\GuardSuspicionDecree;
+use Stories\Domain\Matches\Decree\Peasant\PeasantBestFriendDecree;
+use Stories\Domain\Matches\Decree\Peasant\PeasantDarkHorseDecree;
+use Stories\Domain\Matches\Decree\Peasant\PeasantFamilyTiesDecree;
+use Stories\Domain\Matches\Decree\Peasant\PeasantTwinDecree;
 use Stories\Shared\Error\ApiErrorCode;
 use Stories\Shared\Error\ApiException;
 
@@ -48,8 +54,12 @@ final class DecreeRegistry
         }
 
         $decrees = [
-            new FreeInterrogationDecree(),
-            new SuspicionDecree(),
+            new PeasantTwinDecree(),
+            new PeasantDarkHorseDecree(),
+            new PeasantFamilyTiesDecree(),
+            new PeasantBestFriendDecree(),
+            new GuardFreeInterrogationDecree(),
+            new GuardSuspicionDecree(),
         ];
 
         $this->decreesByCode = [];

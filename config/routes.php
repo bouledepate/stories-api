@@ -12,6 +12,7 @@ use Stories\Presentation\Http\Action\Auth\MeAction;
 use Stories\Presentation\Http\Action\Auth\RegisterAction;
 use Stories\Presentation\Http\Action\Auth\UpdateMeAction;
 use Stories\Presentation\Http\Action\Matches\CreateMatchAction;
+use Stories\Presentation\Http\Action\Matches\ChooseDecreeAction;
 use Stories\Presentation\Http\Action\Matches\GetMatchStateAction;
 use Stories\Presentation\Http\Action\Matches\PlayCardAction;
 use Stories\Presentation\Http\Action\Matches\StartRoundAction;
@@ -65,6 +66,7 @@ return static function (App $app): void {
 
     $app->post('/matches', CreateMatchAction::class);
     $app->post('/matches/{matchId}/start-round', StartRoundAction::class);
+    $app->post('/matches/{matchId}/choose-decree', ChooseDecreeAction::class);
     $app->get('/matches/{matchId}', GetMatchStateAction::class);
     $app->post('/matches/{matchId}/play-card', PlayCardAction::class);
 };

@@ -2,7 +2,7 @@ import { t } from '../../i18n';
 import { esc } from '../../security';
 import { state } from '../../state';
 import { getCurrentRound, getMyMatchRoundPlayer, isMyTurnInMatch } from '../../store/selectors';
-import { getAvailableGuardGuessCards, getGamePromptModel } from '../../features/game/game-ui-model';
+import { getAvailableGuardGuessCards, getGamePromptModel, isPeasantBestFriendActive } from '../../features/game/game-ui-model';
 
 const highlightName = (text) => `<span class="event-actor">${esc(text)}</span>`;
 const highlightCard = (text) => `<span class="event-card">${esc(text)}</span>`;
@@ -114,6 +114,13 @@ const formatEventLine = (event) => {
       card: highlightCard(event.cardName || event.cardCode || 'card'),
     });
   }
+  if (event.type === 'decree_chosen') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    return t('decreeChosenEvent', {
+      actor: highlightName(actorName),
+      decree: highlightCard(event.targetCardName || event.targetCardCode || 'decree'),
+    });
+  }
   if (event.type === 'guard_guess_miss') {
     const actorName = resolvePlayerName(event.actorUserId);
     const targetName = resolvePlayerName(event.targetUserId);
@@ -221,6 +228,13 @@ const formatEventLine = (event) => {
       actor: highlightName(actorName),
       card: highlightCard('Королева'),
       decree: highlightCard(event.targetCardName || event.targetCardCode || 'decree'),
+    });
+  }
+  if (event.type === 'queen_decree_choice_started') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    return t('queenDecreeChoiceStartedEvent', {
+      actor: highlightName(actorName),
+      card: highlightCard('Королева'),
     });
   }
   if (event.type === 'king_discard_elimination') {
@@ -355,6 +369,40 @@ const renderActiveDecrees = () => {
             <span>${esc(decree.effectText || '')}</span>
           </div>
         `).join('') : `<div class="game-muted">${t('noActiveDecrees')}</div>`}
+      </div>
+    </div>
+  `;
+};
+
+const renderPendingDecreeChoice = () => {
+  const choice = state.activeMatch?.pendingDecreeChoice;
+  if (!choice || !Array.isArray(choice.candidates) || choice.candidates.length === 0) return '';
+
+  const isLeader = choice.leaderUserId === state.user?.id;
+  const leaderName = resolvePlayerName(choice.leaderUserId);
+  const replaceable = Array.isArray(choice.replaceableDecrees) ? choice.replaceableDecrees : [];
+  const defaultReplaceCode = replaceable[0]?.code || '';
+
+  return `
+    <div class="game-decree-choice">
+      <div class="game-decree-choice-card">
+        <p class="game-kicker">${esc(t('decreeChoiceKicker'))}</p>
+        <h3>${esc(t('decreeChoiceTitle'))}</h3>
+        <p>${esc(isLeader ? t('decreeChoiceHint') : t('decreeChoiceWaiting', { player: leaderName }))}</p>
+        <div class="game-decree-choice-options">
+          ${choice.candidates.map((decree) => `
+            <button
+              class="game-decree-choice-option"
+              data-act="chooseDecree"
+              data-decree-code="${esc(decree.code || '')}"
+              data-replace-decree-code="${esc(defaultReplaceCode)}"
+              ${isLeader ? '' : 'disabled'}
+            >
+              <strong>${esc(decree.title || decree.code || '')}</strong>
+              <span>${esc(decree.effectText || '')}</span>
+            </button>
+          `).join('')}
+        </div>
       </div>
     </div>
   `;
@@ -679,11 +727,18 @@ const renderPendingDecisionPrompt = () => {
 const renderRevealedCardsRail = () => {
   const round = getCurrentRound();
   const revealedCards = Array.isArray(round?.revealedCards) ? round.revealedCards : [];
-  if (revealedCards.length === 0) return '';
+  const removedDecreeCards = Array.isArray(round?.removedDecreeCards) ? round.removedDecreeCards : [];
+  const cards = [...revealedCards, ...removedDecreeCards.map((card) => ({ ...card, removedByDecree: true }))];
+  if (cards.length === 0) return '';
 
   return `
     <aside class="game-revealed-rail" aria-label="revealed-cards">
-      ${revealedCards.map((card, index) => renderDiscardCard(card, '', index)).join('')}
+      ${cards.map((card, index) => `
+        <div class="${card.removedByDecree ? 'removed-decree-card-wrap' : ''}">
+          ${card.removedByDecree ? `<span class="removed-decree-card-label">${esc(t('removedByDecree'))}</span>` : ''}
+          ${renderDiscardCard(card, '', index)}
+        </div>
+      `).join('')}
     </aside>
   `;
 };
@@ -792,6 +847,7 @@ const renderHandDock = () => {
   const lockedCardCode = me?.lockedCardCode || null;
   const isProtected = Boolean(me?.protectedFromEffects);
   const hasBlackRoseToken = Boolean(me?.hasBlackRoseToken);
+  const peasantPlayForbidden = isPeasantBestFriendActive();
 
   return `
     <section class="game-hand-dock">
@@ -812,17 +868,20 @@ const renderHandDock = () => {
         ${cards.map((card) => {
           const isLocked = (lockedCardInstanceId && card.instanceId === lockedCardInstanceId)
             || (!lockedCardInstanceId && lockedCardCode && card.code === lockedCardCode);
+          const isForbiddenByDecree = peasantPlayForbidden && card.code === 'peasant';
           return `
           <button
-            class="game-card-button ${canPlay ? '' : 'muted'} ${isLocked ? 'locked' : ''}"
+            class="game-card-button ${canPlay ? '' : 'muted'} ${isLocked || isForbiddenByDecree ? 'locked' : ''} ${isForbiddenByDecree ? 'decree-forbidden' : ''}"
             data-act="playCard"
             data-card-code="${esc(card.code)}"
             data-card-instance-id="${esc(card.instanceId || '')}"
-            data-card-locked="${esc(String(Boolean(isLocked)))}"
+            data-card-locked="${esc(String(Boolean(isLocked || isForbiddenByDecree)))}"
+            data-card-decree-forbidden="${esc(String(Boolean(isForbiddenByDecree)))}"
           >
             <span class="game-card-value">${esc(String(card.value ?? 0))}</span>
             <span class="game-card-name">${esc(card.name || card.code)}</span>
             ${isLocked ? `<span class="game-card-lock-badge">${esc(t('cardLockedBadge'))}</span>` : ''}
+            ${isForbiddenByDecree ? `<span class="game-card-lock-badge">${esc(t('cardForbiddenByDecreeBadge'))}</span>` : ''}
           </button>
         `;}).join('')}
       </div>
@@ -879,6 +938,7 @@ export const renderGameScreen = () => {
         ${renderEventLog()}
       </aside>
       ${renderChatWidget()}
+      ${renderPendingDecreeChoice()}
       ${renderMatchFinishPanel()}
       ${renderCardPreview()}
       ${renderGameConfirmPrompt()}

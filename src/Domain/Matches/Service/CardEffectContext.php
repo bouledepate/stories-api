@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Stories\Domain\Matches\Service;
 
 use Stories\Domain\Matches\Card\CharacterCardRegistry;
+use Stories\Domain\Matches\Decree\DecreeRegistry;
 use Stories\Domain\Matches\Model\Card;
 use Stories\Domain\Matches\Model\CardPlay;
 use Stories\Domain\Matches\Model\MatchState;
@@ -22,6 +23,7 @@ final class CardEffectContext
         public readonly Card $playedCard,
         public readonly RoundPlayerState $actorState,
         private readonly CharacterCardRegistry $cards,
+        private readonly DecreeRegistry $decrees,
         private readonly PlayerEliminationService $eliminations,
     ) {
     }
@@ -99,7 +101,7 @@ final class CardEffectContext
             throw new ApiException(ApiErrorCode::TARGET_PLAYER_INVALID);
         }
 
-        if ($targetUserId !== $this->play->actorUserId && $targetState->protectedFromEffects) {
+        if ($targetUserId !== $this->play->actorUserId && $this->targetIsProtectedFromPlayedCard($targetState)) {
             if ($availableTargetIds === []) {
                 return null;
             }
@@ -134,7 +136,7 @@ final class CardEffectContext
                 continue;
             }
 
-            if ($state->protectedFromEffects) {
+            if ($this->targetIsProtectedFromPlayedCard($state)) {
                 continue;
             }
 
@@ -142,6 +144,21 @@ final class CardEffectContext
         }
 
         return $targetIds;
+    }
+
+    private function targetIsProtectedFromPlayedCard(RoundPlayerState $targetState): bool
+    {
+        if ($targetState->protectedFromEffects) {
+            return true;
+        }
+
+        foreach ($this->match->unsuppressedDecrees($this->round) as $activeDecree) {
+            if ($this->decrees->require($activeDecree->code)->protectsFromCardEffect($targetState, $this->playedCard->code)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function requireGuessedCardCode(): string

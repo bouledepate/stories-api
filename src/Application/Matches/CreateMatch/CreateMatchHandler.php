@@ -5,13 +5,11 @@ declare(strict_types=1);
 namespace Stories\Application\Matches\CreateMatch;
 
 use Stories\Application\Matches\Support\MatchViewFormatter;
-use Stories\Domain\Matches\Decree\DecreeRegistry;
 use Stories\Domain\Matches\Model\MatchPlayer;
 use Stories\Domain\Matches\Model\MatchState;
 use Stories\Domain\Matches\Model\MatchStatus;
 use Stories\Domain\Matches\Repository\MatchesRepository;
 use Stories\Domain\Matches\Repository\RoomMatchPlayersProvider;
-use Stories\Domain\Matches\Service\DecreeRotationService;
 use Stories\Domain\Rooms\Repository\RoomParticipantsRepository;
 use Stories\Domain\Rooms\Repository\RoomsRepository;
 use Stories\Shared\Error\ApiErrorCode;
@@ -26,14 +24,8 @@ final class CreateMatchHandler
         private readonly RoomParticipantsRepository $participants,
         private readonly RoomMatchPlayersProvider $playersProvider,
         private readonly MatchViewFormatter $formatter,
-        DecreeRotationService|DecreeRegistry $decreeRotation,
     ) {
-        $this->decreeRotation = $decreeRotation instanceof DecreeRotationService
-            ? $decreeRotation
-            : new DecreeRotationService($decreeRotation);
     }
-
-    private readonly DecreeRotationService $decreeRotation;
 
     /**
      * @return array<string,mixed>
@@ -90,9 +82,8 @@ final class CreateMatchHandler
             updatedAt: gmdate(DATE_ATOM),
             activeDecrees: [],
             decreeDeckCodes: [],
+            decreeDiscardCodes: [],
         );
-
-        $this->decreeRotation->initializeForNewMatch($match);
 
         $this->matches->create($match);
 

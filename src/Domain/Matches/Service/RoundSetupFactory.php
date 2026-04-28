@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stories\Domain\Matches\Service;
 
+use Stories\Domain\Matches\Decree\DecreeRegistry;
 use Stories\Domain\Matches\Model\Card;
 use Stories\Domain\Matches\Model\MatchPlayer;
 use Stories\Domain\Matches\Model\MatchState;
@@ -17,15 +18,15 @@ final class RoundSetupFactory
 {
     public function __construct(
         private readonly CharacterDeckFactory $deckFactory,
-        private readonly ?DecreeRotationService $decreeRotation = null,
+        private readonly DecreeRegistry $decrees,
     )
     {
     }
 
     public function create(MatchState $match): RoundState
     {
-        $this->decreeRotation?->rotateForRound($match);
         $deck = $this->deckFactory->createShuffledDeck();
+        $removedDecreeCards = $this->applyDecreeDeckModifiers($match, $deck);
         $this->assertDeckCapacity($match, $deck);
 
         $round = new RoundState(
@@ -38,12 +39,27 @@ final class RoundSetupFactory
             lastAction: null,
             finishedReason: null,
             roundWinners: [],
+            removedDecreeCards: $removedDecreeCards,
         );
 
         $round->deck = array_values($deck);
         $round->drawFor($round->activePlayerId ?? '');
 
         return $round;
+    }
+
+    /**
+     * @param list<Card> $deck
+     * @return list<Card>
+     */
+    private function applyDecreeDeckModifiers(MatchState $match, array &$deck): array
+    {
+        $removed = [];
+        foreach ($match->activeDecrees as $activeDecree) {
+            $removed = array_merge($removed, $this->decrees->require($activeDecree->code)->modifyRoundDeck($deck));
+        }
+
+        return $removed;
     }
 
     private function pickFirstPlayerId(MatchState $match): string

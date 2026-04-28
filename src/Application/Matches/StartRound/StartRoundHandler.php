@@ -40,7 +40,9 @@ final class StartRoundHandler
 
         $updated = $this->engine->startRound($match);
         $this->matches->save($updated);
-        $this->rooms->updateStatus($updated->roomId, 'active');
+        if ($updated->hasActiveRound()) {
+            $this->rooms->updateStatus($updated->roomId, 'active');
+        }
 
         return $this->formatter->format($updated, $actor->id);
     }

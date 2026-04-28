@@ -18,6 +18,7 @@ final class MatchEngine
 {
     public function __construct(
         private readonly RoundSetupFactory $roundSetup,
+        private readonly DecreeRotationService $decreeRotation,
         private readonly TurnResolver $turnResolver,
         private readonly RoundFinisher $roundFinisher,
     ) {
@@ -26,8 +27,47 @@ final class MatchEngine
     public function startRound(MatchState $match): MatchState
     {
         $this->assertCanStartRound($match);
+        if (!$this->ensureDecreeRotationResolved($match)) {
+            return $match;
+        }
 
         return $this->activateRound($match, $this->roundSetup->create($match));
+    }
+
+    public function chooseDecree(MatchState $match, string $actorUserId, string $chosenCode, ?string $replaceCode = null): MatchState
+    {
+        $choice = $match->pendingDecreeChoice;
+        if ($choice === null) {
+            throw new ApiException(ApiErrorCode::MATCH_STATE_INVALID);
+        }
+
+        if ($choice->leaderUserId !== $actorUserId) {
+            throw new ApiException(ApiErrorCode::NOT_PLAYER_TURN);
+        }
+
+        $this->decreeRotation->applyChoice($match, $chosenCode, $replaceCode);
+        $chosenDecree = null;
+        foreach ($match->activeDecrees as $activeDecree) {
+            if ($activeDecree->code === $chosenCode) {
+                $chosenDecree = $activeDecree;
+                break;
+            }
+        }
+
+        $started = $this->startRound($match);
+        if ($chosenDecree !== null && $started->currentRound instanceof RoundState) {
+            $started->currentRound->lastAction = new \Stories\Domain\Matches\Model\RoundAction(
+                'decree_chosen',
+                $actorUserId,
+                '',
+                '',
+                gmdate(DATE_ATOM),
+                targetCardCode: $chosenDecree->code,
+                targetCardName: $chosenDecree->title,
+            );
+        }
+
+        return $started;
     }
 
     public function playCard(MatchState $match, CardPlay $play): MatchState
@@ -146,6 +186,61 @@ final class MatchEngine
         $match->markUpdated();
 
         return $match;
+    }
+
+    private function ensureDecreeRotationResolved(MatchState $match): bool
+    {
+        if ($match->roundNumber === 0 && $match->activeDecrees === [] && $match->decreeDeckCodes === [] && $match->decreeDiscardCodes === []) {
+            $this->decreeRotation->initializeForNewMatch($match);
+        }
+
+        $nextRoundNumber = $match->roundNumber + 1;
+        if ($match->decreeRotationRoundNumber === $nextRoundNumber) {
+            return true;
+        }
+
+        if ($match->pendingDecreeChoice !== null) {
+            $match->markUpdated();
+
+            return false;
+        }
+
+        $choice = $this->decreeRotation->prepareChoiceForRound(
+            $match,
+            $nextRoundNumber,
+            $this->decreeLeaderUserId($match),
+        );
+        if ($choice !== null) {
+            $match->pendingDecreeChoice = $choice;
+            $match->markUpdated();
+
+            return false;
+        }
+
+        $match->markUpdated();
+
+        return true;
+    }
+
+    private function decreeLeaderUserId(MatchState $match): string
+    {
+        $players = $match->players;
+        if ($players === []) {
+            throw new ApiException(ApiErrorCode::MATCH_STATE_INVALID);
+        }
+
+        $maxPoints = max(array_map(static fn ($player): int => $player->points, $players));
+        $leaders = array_values(array_filter($players, static fn ($player): bool => $player->points === $maxPoints));
+        $winnerIds = $match->lastRoundSummary?->winnerUserIds ?? [];
+        foreach ($winnerIds as $winnerId) {
+            foreach ($leaders as $leader) {
+                if ($leader->userId === $winnerId) {
+                    return $leader->userId;
+                }
+            }
+        }
+
+        return $leaders[0]->userId;
     }
 
     /**

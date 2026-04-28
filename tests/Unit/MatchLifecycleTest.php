@@ -7,6 +7,8 @@ namespace Stories\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 use Stories\Application\Matches\CreateMatch\CreateMatchHandler;
 use Stories\Application\Matches\CreateMatch\CreateMatchRequest;
+use Stories\Application\Matches\ChooseDecree\ChooseDecreeHandler;
+use Stories\Application\Matches\ChooseDecree\ChooseDecreeRequest;
 use Stories\Application\Matches\GetMatchState\GetMatchStateHandler;
 use Stories\Application\Matches\PlayCard\PlayCardHandler;
 use Stories\Application\Matches\PlayCard\PlayCardRequest;
@@ -16,7 +18,6 @@ use Stories\Application\Rooms\GetRoomMatch\GetRoomMatchHandler;
 use Stories\Application\Rooms\LeaveRoom\LeaveRoomHandler;
 use Stories\Application\Rooms\Support\RoomUseCaseSupport;
 use Stories\Domain\Matches\Card\CharacterCardRegistry;
-use Stories\Domain\Matches\Decree\DecreeRegistry;
 use Stories\Domain\Matches\Model\ActiveDecree;
 use Stories\Domain\Matches\Model\Card;
 use Stories\Domain\Matches\Model\CardPlay;
@@ -31,6 +32,8 @@ use Stories\Domain\Matches\Model\RoundStatus;
 use Stories\Domain\Matches\Model\RoundSummary;
 use Stories\Domain\Matches\Service\CardEffectResolver;
 use Stories\Domain\Matches\Service\CharacterDeckFactory;
+use Stories\Domain\Matches\Decree\DecreeRegistry;
+use Stories\Domain\Matches\Service\DecreeRotationService;
 use Stories\Domain\Matches\Service\MatchEngine;
 use Stories\Domain\Matches\Service\PlayerEliminationService;
 use Stories\Domain\Matches\Service\RoundFinisher;
@@ -60,8 +63,9 @@ final class MatchLifecycleTest extends TestCase
         $formatter = new MatchViewFormatter();
         $engine = $this->createEngine();
 
-        $create = new CreateMatchHandler($matches, $rooms, new DbalRoomParticipantsRepository($db), $playersProvider, $formatter, new DecreeRegistry());
+        $create = new CreateMatchHandler($matches, $rooms, new DbalRoomParticipantsRepository($db), $playersProvider, $formatter);
         $start = new StartRoundHandler($matches, $rooms, $playersProvider, $engine, $formatter);
+        $chooseDecree = new ChooseDecreeHandler($matches, $rooms, $engine, $formatter);
         $play = new PlayCardHandler($matches, $engine, $formatter);
         $state = new GetMatchStateHandler($matches, $formatter);
 
@@ -72,7 +76,7 @@ final class MatchLifecycleTest extends TestCase
         $matchId = (string) $created['matchId'];
         self::assertSame('pending', $created['status']);
 
-        $started = $start->handle($matchId, $owner);
+        $started = $this->startRoundResolvingDecreeChoice($start, $chooseDecree, $matchId, $owner);
         self::assertSame('active', $started['status']);
         self::assertSame(1, $started['roundNumber']);
         self::assertIsArray($started['currentRound']);
@@ -124,8 +128,9 @@ final class MatchLifecycleTest extends TestCase
         $formatter = new MatchViewFormatter();
         $engine = $this->createEngine();
 
-        $create = new CreateMatchHandler($matches, $rooms, new DbalRoomParticipantsRepository($db), $playersProvider, $formatter, new DecreeRegistry());
+        $create = new CreateMatchHandler($matches, $rooms, new DbalRoomParticipantsRepository($db), $playersProvider, $formatter);
         $start = new StartRoundHandler($matches, $rooms, $playersProvider, $engine, $formatter);
+        $chooseDecree = new ChooseDecreeHandler($matches, $rooms, $engine, $formatter);
         $play = new PlayCardHandler($matches, $engine, $formatter);
 
         $owner = new AuthenticatedUser('u1', 'owner', 'player');
@@ -133,7 +138,7 @@ final class MatchLifecycleTest extends TestCase
 
         $created = $create->handle(new CreateMatchRequest('room-1'), $owner);
         $matchId = (string) $created['matchId'];
-        $started = $start->handle($matchId, $owner);
+        $started = $this->startRoundResolvingDecreeChoice($start, $chooseDecree, $matchId, $owner);
         $round = (array) $started['currentRound'];
         $activePlayerId = (string) ($round['activePlayerId'] ?? '');
         $nonActiveUser = $activePlayerId === 'u1' ? $second : $owner;
@@ -162,8 +167,9 @@ final class MatchLifecycleTest extends TestCase
         $formatter = new MatchViewFormatter();
         $engine = $this->createEngine();
 
-        $create = new CreateMatchHandler($matches, $rooms, $participants, $playersProvider, $formatter, new DecreeRegistry());
+        $create = new CreateMatchHandler($matches, $rooms, $participants, $playersProvider, $formatter);
         $start = new StartRoundHandler($matches, $rooms, $playersProvider, $engine, $formatter);
+        $chooseDecree = new ChooseDecreeHandler($matches, $rooms, $engine, $formatter);
         $leave = new LeaveRoomHandler($rooms, $participants, $matches, $engine, $support);
 
         $owner = new AuthenticatedUser('u1', 'owner', 'player');
@@ -176,7 +182,7 @@ final class MatchLifecycleTest extends TestCase
         self::assertNotNull($match);
         $match->lastRoundSummary = new RoundSummary(0, RoundFinishedReason::SINGLE_WINNER, ['u1']);
         $matches->save($match);
-        $start->handle($matchId, $owner);
+        $this->startRoundResolvingDecreeChoice($start, $chooseDecree, $matchId, $owner);
 
         $leave->handle('room-1', $owner);
 
@@ -209,8 +215,9 @@ final class MatchLifecycleTest extends TestCase
         $formatter = new MatchViewFormatter();
         $engine = $this->createEngine();
 
-        $create = new CreateMatchHandler($matches, $rooms, $participants, $playersProvider, $formatter, new DecreeRegistry());
+        $create = new CreateMatchHandler($matches, $rooms, $participants, $playersProvider, $formatter);
         $start = new StartRoundHandler($matches, $rooms, $playersProvider, $engine, $formatter);
+        $chooseDecree = new ChooseDecreeHandler($matches, $rooms, $engine, $formatter);
         $leave = new LeaveRoomHandler($rooms, $participants, $matches, $engine, $support);
         $getRoomMatch = new GetRoomMatchHandler($rooms, $participants, $matches, $formatter);
 
@@ -219,7 +226,7 @@ final class MatchLifecycleTest extends TestCase
 
         $created = $create->handle(new CreateMatchRequest('room-1'), $owner);
         $matchId = (string) $created['matchId'];
-        $start->handle($matchId, $owner);
+        $this->startRoundResolvingDecreeChoice($start, $chooseDecree, $matchId, $owner);
         $leave->handle('room-1', $owner);
 
         $roomMatch = $getRoomMatch->handle('room-1', $second);
@@ -315,6 +322,52 @@ final class MatchLifecycleTest extends TestCase
         self::assertNotNull($updated->currentRound);
         self::assertSame('finished', $updated->currentRound->status->value);
         self::assertSame(['u2'], $updated->currentRound->roundWinners);
+    }
+
+    public function testFirstRoundRequiresLeaderDecreeChoiceBeforeRoundStarts(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+        $match = new MatchState(
+            id: 'match-decree-choice-start',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::PENDING,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 0,
+            winnerUserId: null,
+            currentRound: null,
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+        );
+
+        $pending = $engine->startRound($match);
+
+        self::assertSame(MatchStatus::PENDING, $pending->status);
+        self::assertNull($pending->currentRound);
+        self::assertCount(0, $pending->activeDecrees);
+        self::assertNotNull($pending->pendingDecreeChoice);
+        self::assertSame('u1', $pending->pendingDecreeChoice?->leaderUserId);
+        self::assertGreaterThanOrEqual(1, count($pending->pendingDecreeChoice?->candidates ?? []));
+        self::assertLessThanOrEqual(2, count($pending->pendingDecreeChoice?->candidates ?? []));
+
+        $chosenCode = $pending->pendingDecreeChoice?->candidates[0]->code ?? '';
+        $started = $engine->chooseDecree($pending, 'u1', $chosenCode);
+
+        self::assertSame(MatchStatus::ACTIVE, $started->status);
+        self::assertSame(1, $started->roundNumber);
+        self::assertNotNull($started->currentRound);
+        self::assertNull($started->pendingDecreeChoice);
+        self::assertCount(1, $started->activeDecrees);
+        self::assertSame($chosenCode, $started->activeDecrees[0]->code);
+        self::assertSame(1, $started->decreeRotationRoundNumber);
+        self::assertSame('decree_chosen', $started->currentRound?->lastAction?->type);
+        self::assertSame('u1', $started->currentRound?->lastAction?->actorUserId);
+        self::assertSame($chosenCode, $started->currentRound?->lastAction?->targetCardCode);
     }
 
     public function testGuardGuessEliminatesTargetOnHit(): void
@@ -585,6 +638,456 @@ final class MatchLifecycleTest extends TestCase
         } catch (ApiException $exception) {
             self::assertSame(ApiErrorCode::GUARD_CANNOT_GUESS_GUARD, $exception->errorCode);
         }
+    }
+
+    public function testPeasantTwinUsesHighestDiscardValueAtShowdown(): void
+    {
+        $now = gmdate(DATE_ATOM);
+        $match = new MatchState(
+            id: 'match-peasant-twin',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: null,
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+            activeDecrees: [
+                new ActiveDecree(
+                    'peasant_twin',
+                    'Близнец',
+                    'peasant',
+                    'Эта карта в конце раунда будет равна старшей карте в вашем сбросе.',
+                ),
+            ],
+        );
+        $round = new RoundState(
+            status: RoundStatus::ACTIVE,
+            activePlayerId: 'u2',
+            setAsideCard: new Card('set_aside', 'Отложенная', 0),
+            deck: [],
+            revealedCards: [],
+            players: [
+                'u1' => new RoundPlayerState(false, [new Card('peasant', 'Крестьянин', 0)], [new Card('queen', 'Королева', 8)]),
+                'u2' => new RoundPlayerState(false, [new Card('bishop', 'Епископ', 7)], []),
+            ],
+            lastAction: new RoundAction('card_played', 'u2', 'guard', 'Стражник', $now),
+            finishedReason: null,
+            roundWinners: [],
+        );
+
+        (new RoundFinisher(new DecreeRegistry()))->finishRound($match, $round);
+
+        self::assertSame(['u1'], $round->roundWinners);
+        self::assertSame(1, $match->players[0]->points);
+        self::assertSame(0, $match->players[1]->points);
+    }
+
+    public function testSuppressedPeasantTwinDoesNotChangeShowdownValue(): void
+    {
+        $now = gmdate(DATE_ATOM);
+        $match = new MatchState(
+            id: 'match-peasant-twin-suppressed',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: null,
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+            activeDecrees: [
+                new ActiveDecree(
+                    'peasant_twin',
+                    'Близнец',
+                    'peasant',
+                    'Эта карта в конце раунда будет равна старшей карте в вашем сбросе.',
+                ),
+            ],
+        );
+        $round = new RoundState(
+            status: RoundStatus::ACTIVE,
+            activePlayerId: 'u2',
+            setAsideCard: new Card('set_aside', 'Отложенная', 0),
+            deck: [],
+            revealedCards: [],
+            players: [
+                'u1' => new RoundPlayerState(false, [new Card('peasant', 'Крестьянин', 0)], [new Card('queen', 'Королева', 8)]),
+                'u2' => new RoundPlayerState(false, [new Card('bishop', 'Епископ', 7)], []),
+            ],
+            lastAction: new RoundAction('card_played', 'u2', 'guard', 'Стражник', $now),
+            finishedReason: null,
+            roundWinners: [],
+            suppressedDecreeCodes: ['peasant_twin'],
+        );
+
+        (new RoundFinisher(new DecreeRegistry()))->finishRound($match, $round);
+
+        self::assertSame(['u2'], $round->roundWinners);
+        self::assertSame(0, $match->players[0]->points);
+        self::assertSame(1, $match->players[1]->points);
+    }
+
+    public function testPeasantDarkHorseAwardsPointWhenPeasantSurvivesToEndOfRound(): void
+    {
+        $now = gmdate(DATE_ATOM);
+        $match = new MatchState(
+            id: 'match-peasant-dark-horse',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: null,
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+            activeDecrees: [
+                new ActiveDecree(
+                    'peasant_dark_horse',
+                    'Тёмная лошадка',
+                    'peasant',
+                    'Получите 1 королевский жетон, если сохранили эту карту до конца раунда.',
+                ),
+            ],
+        );
+        $round = new RoundState(
+            status: RoundStatus::ACTIVE,
+            activePlayerId: 'u2',
+            setAsideCard: new Card('set_aside', 'Отложенная', 0),
+            deck: [],
+            revealedCards: [],
+            players: [
+                'u1' => new RoundPlayerState(false, [new Card('peasant', 'Крестьянин', 0)], []),
+                'u2' => new RoundPlayerState(false, [new Card('bishop', 'Епископ', 7)], []),
+            ],
+            lastAction: new RoundAction('card_played', 'u2', 'guard', 'Стражник', $now),
+            finishedReason: null,
+            roundWinners: [],
+        );
+
+        (new RoundFinisher(new DecreeRegistry()))->finishRound($match, $round);
+
+        self::assertSame(['u2'], $round->roundWinners);
+        self::assertSame(1, $match->players[0]->points);
+        self::assertSame(1, $match->players[1]->points);
+    }
+
+    public function testSuppressedPeasantDarkHorseDoesNotAwardPoint(): void
+    {
+        $now = gmdate(DATE_ATOM);
+        $match = new MatchState(
+            id: 'match-peasant-dark-horse-suppressed',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: null,
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+            activeDecrees: [
+                new ActiveDecree(
+                    'peasant_dark_horse',
+                    'Тёмная лошадка',
+                    'peasant',
+                    'Получите 1 королевский жетон, если сохранили эту карту до конца раунда.',
+                ),
+            ],
+        );
+        $round = new RoundState(
+            status: RoundStatus::ACTIVE,
+            activePlayerId: 'u2',
+            setAsideCard: new Card('set_aside', 'Отложенная', 0),
+            deck: [],
+            revealedCards: [],
+            players: [
+                'u1' => new RoundPlayerState(false, [new Card('peasant', 'Крестьянин', 0)], []),
+                'u2' => new RoundPlayerState(false, [new Card('bishop', 'Епископ', 7)], []),
+            ],
+            lastAction: new RoundAction('card_played', 'u2', 'guard', 'Стражник', $now),
+            finishedReason: null,
+            roundWinners: [],
+            suppressedDecreeCodes: ['peasant_dark_horse'],
+        );
+
+        (new RoundFinisher(new DecreeRegistry()))->finishRound($match, $round);
+
+        self::assertSame(['u2'], $round->roundWinners);
+        self::assertSame(0, $match->players[0]->points);
+        self::assertSame(1, $match->players[1]->points);
+    }
+
+    public function testPeasantFamilyTiesProtectsPeasantHolderFromGuardEffect(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+
+        $match = new MatchState(
+            id: 'match-peasant-family-ties',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('queen', 'Королева', 8, 'queen-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('guard', 'Стражник', 1, 'guard-u1'),
+                        new Card('scout', 'Разведчик', 2, 'scout-u1'),
+                    ], []),
+                    'u2' => new RoundPlayerState(false, [new Card('peasant', 'Крестьянин', 0, 'peasant-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'scout', 'Разведчик', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+            activeDecrees: [
+                new ActiveDecree(
+                    'peasant_family_ties',
+                    'Родственные связи',
+                    'peasant',
+                    'До конца раунда у вас иммунитет к эффекту карты Стражник.',
+                ),
+            ],
+        );
+
+        $updated = $engine->playCard($match, new CardPlay('u1', 'guard', 'u2', 'peasant', 'guard-u1'));
+
+        self::assertSame('guard_no_target', $updated->currentRound?->lastAction?->type);
+        self::assertSame('u2', $updated->currentRound?->activePlayerId);
+        self::assertNull($updated->currentRound?->pendingDecision);
+        self::assertFalse($updated->currentRound?->getPlayerState('u2')->eliminated ?? true);
+        self::assertSame('peasant', $updated->currentRound?->getPlayerState('u2')->peekFirstCardInHand()?->code);
+    }
+
+    public function testSuppressedPeasantFamilyTiesDoesNotProtectFromGuardEffect(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+
+        $match = new MatchState(
+            id: 'match-peasant-family-ties-suppressed',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('queen', 'Королева', 8, 'queen-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('guard', 'Стражник', 1, 'guard-u1'),
+                        new Card('scout', 'Разведчик', 2, 'scout-u1'),
+                    ], []),
+                    'u2' => new RoundPlayerState(false, [new Card('peasant', 'Крестьянин', 0, 'peasant-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'scout', 'Разведчик', $now),
+                finishedReason: null,
+                roundWinners: [],
+                suppressedDecreeCodes: ['peasant_family_ties'],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+            activeDecrees: [
+                new ActiveDecree(
+                    'peasant_family_ties',
+                    'Родственные связи',
+                    'peasant',
+                    'До конца раунда у вас иммунитет к эффекту карты Стражник.',
+                ),
+            ],
+        );
+
+        $updated = $engine->playCard($match, new CardPlay('u1', 'guard', 'u2', 'peasant', 'guard-u1'));
+
+        self::assertSame('guard_guess_hit', $updated->currentRound?->lastAction?->type);
+        self::assertTrue($updated->currentRound?->getPlayerState('u2')->eliminated ?? false);
+        self::assertSame(['u1'], $updated->currentRound?->roundWinners);
+    }
+
+    public function testPeasantBestFriendRemovesOnePeasantFromRoundDeck(): void
+    {
+        $deckFactory = new CharacterDeckFactory(new CharacterCardRegistry());
+        $roundSetup = new RoundSetupFactory($deckFactory, new DecreeRegistry());
+        $now = gmdate(DATE_ATOM);
+        $match = new MatchState(
+            id: 'match-peasant-best-friend-deck',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::PENDING,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 0,
+            winnerUserId: null,
+            currentRound: null,
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+            activeDecrees: [
+                new ActiveDecree(
+                    'peasant_best_friend',
+                    'Лучший друг',
+                    'peasant',
+                    'Пока активен указ: уберите из колоды одну карту Крестьянин. Вы не можете разыграть эту карту. Её можно сбросить эффектами других карт.',
+                ),
+            ],
+        );
+
+        $round = $roundSetup->create($match);
+
+        self::assertSame(1, $this->countCardsInRound($round, 'peasant'));
+        self::assertCount(1, $round->removedDecreeCards);
+        self::assertSame('peasant', $round->removedDecreeCards[0]->code);
+    }
+
+    public function testPeasantBestFriendForbidsVoluntaryPeasantPlay(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+        $match = new MatchState(
+            id: 'match-peasant-best-friend-play',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('queen', 'Королева', 8, 'queen-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('peasant', 'Крестьянин', 0, 'peasant-u1'),
+                        new Card('scout', 'Разведчик', 2, 'scout-u1'),
+                    ], []),
+                    'u2' => new RoundPlayerState(false, [new Card('bishop', 'Епископ', 7, 'bishop-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'bishop', 'Епископ', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+            activeDecrees: [
+                new ActiveDecree(
+                    'peasant_best_friend',
+                    'Лучший друг',
+                    'peasant',
+                    'Пока активен указ: уберите из колоды одну карту Крестьянин. Вы не можете разыграть эту карту. Её можно сбросить эффектами других карт.',
+                ),
+            ],
+        );
+
+        try {
+            $engine->playCard($match, new CardPlay('u1', 'peasant', cardInstanceId: 'peasant-u1'));
+            self::fail('Expected ApiException was not thrown');
+        } catch (ApiException $exception) {
+            self::assertSame(ApiErrorCode::CARD_PLAY_FORBIDDEN_BY_DECREE, $exception->errorCode);
+        }
+    }
+
+    public function testPeasantBestFriendAllowsForcedPeasantDiscardByOtherCardEffect(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+        $match = new MatchState(
+            id: 'match-peasant-best-friend-forced-discard',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('queen', 'Королева', 8, 'queen-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('rebel', 'Мятежник', 5, 'rebel-u1'),
+                        new Card('guard', 'Стражник', 1, 'guard-u1'),
+                    ], []),
+                    'u2' => new RoundPlayerState(false, [new Card('peasant', 'Крестьянин', 0, 'peasant-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'peasant', 'Крестьянин', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+            activeDecrees: [
+                new ActiveDecree(
+                    'peasant_best_friend',
+                    'Лучший друг',
+                    'peasant',
+                    'Пока активен указ: уберите из колоды одну карту Крестьянин. Вы не можете разыграть эту карту. Её можно сбросить эффектами других карт.',
+                ),
+            ],
+        );
+
+        $updated = $engine->playCard($match, new CardPlay('u1', 'rebel', 'u2', null, 'rebel-u1'));
+
+        self::assertSame('rebel_redraw', $updated->currentRound?->lastAction?->type);
+        self::assertSame('peasant', $updated->currentRound?->lastAction?->targetCardCode);
+        self::assertSame('peasant', $updated->currentRound?->getPlayerState('u2')->discard[0]->code ?? null);
+        self::assertSame('queen', $updated->currentRound?->getPlayerState('u2')->peekFirstCardInHand()?->code);
     }
 
     public function testGuardGuessMissWithPeasantCanReactAndSurvive(): void
@@ -1533,6 +2036,47 @@ final class MatchLifecycleTest extends TestCase
         self::assertSame([], $updated->currentRound?->getPlayerState('u2')->hand ?? []);
     }
 
+    private function countCardsInRound(RoundState $round, string $cardCode): int
+    {
+        $count = 0;
+        $cards = array_merge([$round->setAsideCard], $round->deck, $round->revealedCards);
+        foreach ($round->players as $playerState) {
+            $cards = array_merge($cards, $playerState->hand, $playerState->discard);
+        }
+
+        foreach ($cards as $card) {
+            if ($card->code === $cardCode) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function startRoundResolvingDecreeChoice(
+        StartRoundHandler $start,
+        ChooseDecreeHandler $chooseDecree,
+        string $matchId,
+        AuthenticatedUser $leader,
+    ): array {
+        $started = $start->handle($matchId, $leader);
+        $choice = $started['pendingDecreeChoice'] ?? null;
+        if (is_array($choice)) {
+            $candidate = ((array) ($choice['candidates'] ?? []))[0] ?? null;
+            self::assertIsArray($candidate);
+            $started = $chooseDecree->handle(
+                $matchId,
+                new ChooseDecreeRequest((string) ($candidate['code'] ?? '')),
+                $leader,
+            );
+        }
+
+        return $started;
+    }
+
     /**
      * @param list<array<string,mixed>> $players
      * @return array<string,mixed>
@@ -1552,13 +2096,15 @@ final class MatchLifecycleTest extends TestCase
     {
         $cards = new CharacterCardRegistry();
         $deckFactory = new CharacterDeckFactory($cards);
+        $decreeRotation = new DecreeRotationService(new DecreeRegistry());
         $eliminations = new PlayerEliminationService();
         $effectResolver = new CardEffectResolver($cards, new DecreeRegistry(), $eliminations);
 
         return new MatchEngine(
-            new RoundSetupFactory($deckFactory),
-            new TurnResolver($effectResolver, $eliminations),
-            new RoundFinisher(),
+            new RoundSetupFactory($deckFactory, new DecreeRegistry()),
+            $decreeRotation,
+            new TurnResolver($effectResolver, new DecreeRegistry(), $eliminations),
+            new RoundFinisher(new DecreeRegistry()),
         );
     }
 

@@ -37,6 +37,7 @@ final class CardEffectResolver
                 $playedCard,
                 $actorState,
                 $this->cards,
+                $this->decrees,
                 $this->eliminations,
             ));
 
@@ -51,6 +52,7 @@ final class CardEffectResolver
             $playedCard,
             $actorState,
             $this->cards,
+            $this->decrees,
             $this->eliminations,
         ));
     }

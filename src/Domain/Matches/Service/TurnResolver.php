@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stories\Domain\Matches\Service;
 
+use Stories\Domain\Matches\Decree\DecreeRegistry;
 use Stories\Domain\Matches\Model\Card;
 use Stories\Domain\Matches\Model\CardPlay;
 use Stories\Domain\Matches\Model\MatchState;
@@ -17,6 +18,7 @@ final class TurnResolver
 {
     public function __construct(
         private readonly CardEffectResolver $effectResolver,
+        private readonly DecreeRegistry $decrees,
         private readonly PlayerEliminationService $eliminations,
     )
     {
@@ -24,7 +26,7 @@ final class TurnResolver
 
     public function resolveCardPlay(MatchState $match, RoundState $round, CardPlay $play): void
     {
-        $this->assertCanPlayCard($round, $play);
+        $this->assertCanPlayCard($match, $round, $play);
 
         $playerState = $round->getPlayerState($play->actorUserId);
         $hadLockedCard = $playerState->hasLockedCard();
@@ -236,7 +238,7 @@ final class TurnResolver
         );
     }
 
-    private function assertCanPlayCard(RoundState $round, CardPlay $play): void
+    private function assertCanPlayCard(MatchState $match, RoundState $round, CardPlay $play): void
     {
         if (!$round->isActive()) {
             throw new ApiException(ApiErrorCode::ROUND_NOT_ACTIVE);
@@ -254,6 +256,12 @@ final class TurnResolver
         $selectedCard = $this->findSelectedCard($playerState, $play);
         if ($selectedCard !== null && $playerState->isLockedCard($selectedCard)) {
             throw new ApiException(ApiErrorCode::CARD_PLAY_BLOCKED);
+        }
+
+        if ($selectedCard !== null) {
+            foreach ($match->unsuppressedDecrees($round) as $activeDecree) {
+                $this->decrees->require($activeDecree->code)->assertCanPlayCard($playerState, $selectedCard);
+            }
         }
     }
 

@@ -203,7 +203,7 @@ export const startMatchFromRoom = async (render) => {
     resetGameEventLog();
     setGameChatUnreadCount(0);
     activateMatch(started);
-    emitLobbiesChanged('room_match_started', {
+    if (started.currentRound?.status === 'active') emitLobbiesChanged('room_match_started', {
       roomId: state.activeRoom.roomId,
       matchId: started.matchId,
       actorUserId: state.user?.id,
@@ -214,10 +214,41 @@ export const startMatchFromRoom = async (render) => {
       event: 'match_state_updated',
       data: { matchId: started.matchId },
     });
-    showToast(t('gameStarted'), 'ok');
+    showToast(started.pendingDecreeChoice ? t('decreeChoicePending') : t('gameStarted'), 'ok');
     render();
   } catch (error) {
     showApiError('roomStatus', error);
+  }
+};
+
+export const chooseMatchDecree = async (render, decreeCode, replaceDecreeCode = '') => {
+  if (!state.activeMatch?.matchId || !decreeCode) return;
+  try {
+    const updated = await callApi(`/matches/${encodeURIComponent(state.activeMatch.matchId)}/choose-decree`, {
+      method: 'POST',
+      body: JSON.stringify({
+        decreeCode,
+        ...(replaceDecreeCode ? { replaceDecreeCode } : {}),
+      }),
+    });
+    activateMatch(updated, { withTab: true, keepViewTab: true });
+    if (updated.currentRound?.status === 'active') {
+      emitLobbiesChanged('room_match_started', {
+        roomId: updated.roomId,
+        matchId: updated.matchId,
+        actorUserId: state.user?.id,
+      });
+    }
+    sendSocketMessage({
+      type: 'room_event',
+      roomId: updated.roomId,
+      event: 'match_state_updated',
+      data: { matchId: updated.matchId },
+    });
+    showToast(t('decreeChosen'), 'ok');
+    render();
+  } catch (error) {
+    showApiError('gameStatus', error);
   }
 };
 

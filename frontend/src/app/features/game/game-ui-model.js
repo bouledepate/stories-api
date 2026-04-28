@@ -1,4 +1,5 @@
 import { getCurrentRound, getMyMatchRoundPlayer, getTargetableMatchPlayers } from '../../store/selectors';
+import { state } from '../../state';
 import { findCatalogCard, matchCardCatalog } from './card-catalog';
 import { getGameCardActionConfig } from './game-action-config';
 
@@ -13,6 +14,8 @@ const buildVisibleCardCounts = () => {
 
   const revealedCards = Array.isArray(round?.revealedCards) ? round.revealedCards : [];
   revealedCards.forEach(addCard);
+  const removedDecreeCards = Array.isArray(round?.removedDecreeCards) ? round.removedDecreeCards : [];
+  removedDecreeCards.forEach(addCard);
 
   const roundPlayers = Array.isArray(round?.players) ? round.players : [];
   roundPlayers.forEach((player) => {
@@ -29,6 +32,10 @@ const buildVisibleCardCounts = () => {
 export const isFreeInterrogationActive = () => (
   getCurrentRound()?.activeDecrees || []
 ).some((decree) => decree?.code === 'free_interrogation' && !decree?.suppressedByQueen);
+
+export const isPeasantBestFriendActive = () => (
+  getCurrentRound()?.activeDecrees || state.activeMatch?.activeDecrees || []
+).some((decree) => decree?.code === 'peasant_best_friend' && !decree?.suppressedByQueen);
 
 export const getAvailableGuardGuessCards = ({ allowGuard = isFreeInterrogationActive() } = {}) => {
   const visibleCounts = buildVisibleCardCounts();

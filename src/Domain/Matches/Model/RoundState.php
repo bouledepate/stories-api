@@ -15,6 +15,7 @@ final class RoundState
      * @param array<string,RoundPlayerState> $players
      * @param list<string> $roundWinners
      * @param list<string> $suppressedDecreeCodes
+     * @param list<Card> $removedDecreeCards
      */
     public function __construct(
         public RoundStatus $status,
@@ -28,6 +29,7 @@ final class RoundState
         public array $roundWinners,
         public ?PendingDecision $pendingDecision = null,
         public array $suppressedDecreeCodes = [],
+        public array $removedDecreeCards = [],
     ) {
     }
 
@@ -45,6 +47,13 @@ final class RoundState
         foreach ((array) ($data['revealedCards'] ?? []) as $cardData) {
             if (is_array($cardData)) {
                 $revealedCards[] = Card::fromArray($cardData);
+            }
+        }
+
+        $removedDecreeCards = [];
+        foreach ((array) ($data['removedDecreeCards'] ?? []) as $cardData) {
+            if (is_array($cardData)) {
+                $removedDecreeCards[] = Card::fromArray($cardData);
             }
         }
 
@@ -76,6 +85,7 @@ final class RoundState
             array_values(array_map(static fn (mixed $item): string => (string) $item, (array) ($data['roundWinners'] ?? []))),
             is_array($pendingDecisionData) ? PendingDecision::fromArray($pendingDecisionData) : null,
             $suppressedDecreeCodes,
+            $removedDecreeCards,
         );
     }
 
@@ -197,6 +207,7 @@ final class RoundState
             'setAsideCard' => $this->setAsideCard->toArray(),
             'deck' => array_map(static fn (Card $card): array => $card->toArray(), $this->deck),
             'revealedCards' => array_map(static fn (Card $card): array => $card->toArray(), $this->revealedCards),
+            'removedDecreeCards' => array_map(static fn (Card $card): array => $card->toArray(), $this->removedDecreeCards),
             'players' => $players,
             'pendingDecision' => $this->pendingDecision?->toArray(),
             'suppressedDecreeCodes' => array_values($this->suppressedDecreeCodes),

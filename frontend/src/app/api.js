@@ -60,6 +60,7 @@ const mapErrorCode = (code, status) => {
     GUARD_CANNOT_GUESS_GUARD: 'guardCannotGuessGuard',
     PEASANT_REACTION_ONLY: 'peasantReactionOnly',
     CARD_PLAY_BLOCKED: 'cardPlayBlocked',
+    CARD_PLAY_FORBIDDEN_BY_DECREE: 'cardPlayForbiddenByDecree',
     TARGET_PLAYER_PROTECTED: 'targetPlayerProtected',
     MATCH_STATE_INVALID: 'matchStateInvalid',
     PLAYERS_NOT_READY: 'playersNotReady',
