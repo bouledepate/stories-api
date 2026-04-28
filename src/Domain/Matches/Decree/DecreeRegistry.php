@@ -49,6 +49,7 @@ final class DecreeRegistry
 
         $decrees = [
             new FreeInterrogationDecree(),
+            new SuspicionDecree(),
         ];
 
         $this->decreesByCode = [];

@@ -61,7 +61,44 @@ final class TurnResolver
             return $pendingDecision->originActorUserId;
         }
 
+        if ($pendingDecision->type === 'suspicion_counter_guess') {
+            $this->resolveSuspicionCounterGuess($round, $play, $pendingDecision);
+            return $pendingDecision->originActorUserId;
+        }
+
         throw new ApiException(ApiErrorCode::MATCH_STATE_INVALID);
+    }
+
+    private function resolveSuspicionCounterGuess(RoundState $round, CardPlay $play, \Stories\Domain\Matches\Model\PendingDecision $pendingDecision): void
+    {
+        $guessedCardCode = $play->guessedCardCode;
+        if ($guessedCardCode === null || $guessedCardCode === '') {
+            throw new ApiException(ApiErrorCode::CARD_GUESS_REQUIRED);
+        }
+
+        if ($guessedCardCode === 'guard') {
+            throw new ApiException(ApiErrorCode::GUARD_CANNOT_GUESS_GUARD);
+        }
+
+        $originState = $round->getPlayerState($pendingDecision->originActorUserId);
+        $originCard = $originState->peekFirstCardInHand();
+        $actionType = $originCard?->code === $guessedCardCode ? 'decree_guard_counter_guess_hit' : 'decree_guard_counter_guess_miss';
+
+        if ($actionType === 'decree_guard_counter_guess_hit') {
+            $this->eliminations->eliminate($round, $pendingDecision->originActorUserId);
+        }
+
+        $round->lastAction = new RoundAction(
+            $actionType,
+            $play->actorUserId,
+            $pendingDecision->cardCode,
+            $pendingDecision->cardName,
+            gmdate(DATE_ATOM),
+            $pendingDecision->originActorUserId,
+            $guessedCardCode,
+            $originCard?->code === $guessedCardCode ? $originCard?->name : $guessedCardCode,
+        );
+        $round->clearPendingDecision();
     }
 
     private function resolveQueenDecreeSuppression(RoundState $round, CardPlay $play, \Stories\Domain\Matches\Model\PendingDecision $pendingDecision): void

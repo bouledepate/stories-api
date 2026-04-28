@@ -15,12 +15,16 @@ use Stories\Shared\Error\ApiException;
 
 final class RoundSetupFactory
 {
-    public function __construct(private readonly CharacterDeckFactory $deckFactory)
+    public function __construct(
+        private readonly CharacterDeckFactory $deckFactory,
+        private readonly ?DecreeRotationService $decreeRotation = null,
+    )
     {
     }
 
     public function create(MatchState $match): RoundState
     {
+        $this->decreeRotation?->rotateForRound($match);
         $deck = $this->deckFactory->createShuffledDeck();
         $this->assertDeckCapacity($match, $deck);
 

@@ -1,18 +1,23 @@
 import { state } from '../../state';
 import { t } from '../../i18n';
 import { showToast } from '../../services/feedback';
-import { getActiveMatchOpponents, getCurrentRound, getTargetableMatchPlayers, isMyTurnInMatch } from '../../store/selectors';
+import { getTargetableMatchPlayers, isMyTurnInMatch } from '../../store/selectors';
 import { patchGameCardPlayPrompt, setActiveTab, setGameCardPlayPrompt, setGameCardPreview, setGameChatOpen, setGameChatUnreadCount, setGameConfirmPrompt } from '../../store/mutations';
 import { matchCardCatalog } from './card-catalog';
+import { getGameCardActionConfig, isInteractiveMatchCard } from './game-action-config';
 import { leaveFinishedMatchRoom, leaveGameAndRoom, playMatchCard, sendGameChatMessage, startMatchFromRoom, syncGameChatScroll } from './game-flow';
+import { isFreeInterrogationActive } from './game-ui-model';
 
 export const bindGameEvents = (render) => {
   const canGuardGuessCard = (cardCode) => {
     if (cardCode !== 'guard') return matchCardCatalog.some((card) => card.code === cardCode);
 
-    return (getCurrentRound()?.activeDecrees || []).some(
-      (decree) => decree?.code === 'free_interrogation' && !decree?.suppressedByQueen
-    );
+    return isFreeInterrogationActive();
+  };
+
+  const getPromptTargets = (cardCode) => {
+    const config = getGameCardActionConfig(cardCode);
+    return getTargetableMatchPlayers({ includeSelf: Boolean(config?.includeSelf) });
   };
 
   document.querySelector('[data-act="toggleGameChat"]')?.addEventListener('click', () => {
@@ -124,16 +129,15 @@ export const bindGameEvents = (render) => {
         return;
       }
 
-      if (cardCode !== 'guard' && cardCode !== 'scout' && cardCode !== 'executioner' && cardCode !== 'rebel' && cardCode !== 'feudal_lord') {
+      if (!isInteractiveMatchCard(cardCode)) {
         await playMatchCard(render, cardCode, { cardInstanceId });
         return;
       }
 
-      const targets = cardCode === 'rebel' || cardCode === 'feudal_lord'
-        ? getTargetableMatchPlayers({ includeSelf: true })
-        : getActiveMatchOpponents();
-      if (targets.length === 0 || (cardCode === 'feudal_lord' && targets.length < 2)) {
-        if (cardCode === 'guard' || cardCode === 'scout' || cardCode === 'executioner' || cardCode === 'feudal_lord') {
+      const actionConfig = getGameCardActionConfig(cardCode);
+      const targets = getPromptTargets(cardCode);
+      if (targets.length === 0 || (actionConfig?.promptType === 'double_target' && targets.length < 2)) {
+        if (cardCode !== 'rebel') {
           await playMatchCard(render, cardCode, { cardInstanceId });
           return;
         }
@@ -146,7 +150,7 @@ export const bindGameEvents = (render) => {
         cardCode,
         cardInstanceId,
         targetUserId: targets[0]?.userId || '',
-        secondTargetUserId: cardCode === 'feudal_lord' ? targets[1]?.userId || '' : '',
+        secondTargetUserId: actionConfig?.promptType === 'double_target' ? targets[1]?.userId || '' : '',
         guessedCardCode: '',
       });
       render();
@@ -285,6 +289,12 @@ export const bindGameEvents = (render) => {
 
   document.querySelector('[data-act="resolveGuardMiss"]')?.addEventListener('click', async () => {
     await playMatchCard(render, 'peasant', { shouldReact: false });
+  });
+
+  document.querySelectorAll('[data-act="resolveSuspicionCounterGuess"]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await playMatchCard(render, 'guard', { guessedCardCode: button.dataset.cardCode || '' });
+    });
   });
 
   document.querySelectorAll('[data-act="confirmQueenDecreeSuppression"]').forEach((button) => {

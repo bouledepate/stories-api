@@ -11,6 +11,7 @@ use Stories\Domain\Matches\Model\MatchState;
 use Stories\Domain\Matches\Model\MatchStatus;
 use Stories\Domain\Matches\Repository\MatchesRepository;
 use Stories\Domain\Matches\Repository\RoomMatchPlayersProvider;
+use Stories\Domain\Matches\Service\DecreeRotationService;
 use Stories\Domain\Rooms\Repository\RoomParticipantsRepository;
 use Stories\Domain\Rooms\Repository\RoomsRepository;
 use Stories\Shared\Error\ApiErrorCode;
@@ -25,9 +26,14 @@ final class CreateMatchHandler
         private readonly RoomParticipantsRepository $participants,
         private readonly RoomMatchPlayersProvider $playersProvider,
         private readonly MatchViewFormatter $formatter,
-        private readonly DecreeRegistry $decrees,
+        DecreeRotationService|DecreeRegistry $decreeRotation,
     ) {
+        $this->decreeRotation = $decreeRotation instanceof DecreeRotationService
+            ? $decreeRotation
+            : new DecreeRotationService($decreeRotation);
     }
+
+    private readonly DecreeRotationService $decreeRotation;
 
     /**
      * @return array<string,mixed>
@@ -82,11 +88,11 @@ final class CreateMatchHandler
             lastRoundSummary: null,
             createdAt: gmdate(DATE_ATOM),
             updatedAt: gmdate(DATE_ATOM),
-            activeDecrees: array_map(
-                static fn ($decree) => $decree->activate(),
-                $this->decrees->openingSet(),
-            ),
+            activeDecrees: [],
+            decreeDeckCodes: [],
         );
+
+        $this->decreeRotation->initializeForNewMatch($match);
 
         $this->matches->create($match);
 

@@ -12,6 +12,7 @@ final class MatchState
     /**
      * @param list<MatchPlayer> $players
      * @param list<ActiveDecree> $activeDecrees
+     * @param list<string> $decreeDeckCodes
      */
     public function __construct(
         public string $id,
@@ -26,6 +27,7 @@ final class MatchState
         public string $createdAt,
         public string $updatedAt,
         public array $activeDecrees = [],
+        public array $decreeDeckCodes = [],
     ) {
     }
 
@@ -47,6 +49,10 @@ final class MatchState
                 $activeDecrees[] = ActiveDecree::fromArray($decreeData);
             }
         }
+        $decreeDeckCodes = array_values(array_map(
+            static fn (mixed $item): string => (string) $item,
+            (array) ($state['decreeDeckCodes'] ?? [])
+        ));
 
         return new self(
             (string) ($state['id'] ?? ''),
@@ -63,6 +69,7 @@ final class MatchState
             (string) ($state['createdAt'] ?? gmdate(DATE_ATOM)),
             (string) ($state['updatedAt'] ?? gmdate(DATE_ATOM)),
             $activeDecrees,
+            $decreeDeckCodes,
         );
     }
 
@@ -169,6 +176,7 @@ final class MatchState
             'currentRound' => $this->currentRound?->toArray(),
             'lastRoundSummary' => $this->lastRoundSummary?->toArray(),
             'activeDecrees' => array_map(static fn (ActiveDecree $decree): array => $decree->toArray(), $this->activeDecrees),
+            'decreeDeckCodes' => array_values($this->decreeDeckCodes),
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
         ];

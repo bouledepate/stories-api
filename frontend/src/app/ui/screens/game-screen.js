@@ -1,8 +1,8 @@
 import { t } from '../../i18n';
 import { esc } from '../../security';
 import { state } from '../../state';
-import { getActiveMatchOpponents, getCurrentRound, getMyMatchRoundPlayer, getTargetableMatchPlayers, isMyTurnInMatch } from '../../store/selectors';
-import { findCatalogCard, matchCardCatalog } from '../../features/game/card-catalog';
+import { getCurrentRound, getMyMatchRoundPlayer, isMyTurnInMatch } from '../../store/selectors';
+import { getAvailableGuardGuessCards, getGamePromptModel } from '../../features/game/game-ui-model';
 
 const highlightName = (text) => `<span class="event-actor">${esc(text)}</span>`;
 const highlightCard = (text) => `<span class="event-card">${esc(text)}</span>`;
@@ -42,41 +42,13 @@ const renderFaceUpCard = (card, ownerName, className = 'showdown-card') => `
   </button>
 `;
 
-const buildVisibleCardCounts = () => {
-  const round = getCurrentRound();
-  const counts = new Map();
-  const addCard = (card) => {
-    const code = card?.code || '';
-    if (!code) return;
-    counts.set(code, Number(counts.get(code) || 0) + 1);
-  };
+const renderStaticFaceUpCard = (card, className = 'showdown-card', valueClass = 'showdown-card-value', nameClass = 'showdown-card-name') => `
+  <div class="${className} static-card" aria-hidden="true">
+    <span class="${valueClass}">${esc(String(card?.value ?? 0))}</span>
+    <span class="${nameClass}">${esc(card?.name || card?.code || '')}</span>
+  </div>
+`;
 
-  const revealedCards = Array.isArray(round?.revealedCards) ? round.revealedCards : [];
-  revealedCards.forEach(addCard);
-
-  const roundPlayers = Array.isArray(round?.players) ? round.players : [];
-  roundPlayers.forEach((player) => {
-    const discard = Array.isArray(player?.discard) ? player.discard : [];
-    discard.forEach(addCard);
-  });
-
-  const myHand = Array.isArray(getMyMatchRoundPlayer()?.hand) ? getMyMatchRoundPlayer().hand : [];
-  myHand.forEach(addCard);
-
-  return counts;
-};
-
-const availableGuardGuessCards = () => {
-  const visibleCounts = buildVisibleCardCounts();
-  const freeInterrogationActive = (getCurrentRound()?.activeDecrees || []).some(
-    (decree) => decree?.code === 'free_interrogation' && !decree?.suppressedByQueen
-  );
-
-  return matchCardCatalog.filter((card) => {
-    if (card.code === 'guard' && !freeInterrogationActive) return false;
-    return Number(visibleCounts.get(card.code) || 0) < Number(card.copies || 0);
-  });
-};
 const targetPoints = (playersCount) => {
   if (playersCount <= 2) return 7;
   if (playersCount === 3) return 6;
@@ -112,6 +84,24 @@ const formatEventLine = (event) => {
     const actorName = resolvePlayerName(event.actorUserId);
     const targetName = resolvePlayerName(event.targetUserId);
     return t('decreeGuardMissEvent', {
+      actor: highlightName(actorName),
+      target: highlightName(targetName),
+      card: highlightCard(event.guessedCardName || event.guessedCardCode || 'card'),
+    });
+  }
+  if (event.type === 'decree_guard_counter_guess_hit') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    const targetName = resolvePlayerName(event.targetUserId);
+    return t('decreeGuardCounterHitEvent', {
+      actor: highlightName(actorName),
+      target: highlightName(targetName),
+      card: highlightCard(event.guessedCardName || event.guessedCardCode || 'card'),
+    });
+  }
+  if (event.type === 'decree_guard_counter_guess_miss') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    const targetName = resolvePlayerName(event.targetUserId);
+    return t('decreeGuardCounterMissEvent', {
       actor: highlightName(actorName),
       target: highlightName(targetName),
       card: highlightCard(event.guessedCardName || event.guessedCardCode || 'card'),
@@ -448,54 +438,60 @@ const renderGameConfirmPrompt = () => {
 
 const renderCardPlayPrompt = () => {
   const prompt = state.gameCardPlayPrompt;
-  if (!prompt || (prompt.cardCode !== 'guard' && prompt.cardCode !== 'scout' && prompt.cardCode !== 'executioner' && prompt.cardCode !== 'rebel' && prompt.cardCode !== 'feudal_lord')) return '';
+  const promptModel = getGamePromptModel(prompt);
+  if (!promptModel) return '';
 
-  const selectedGuess = findCatalogCard(prompt.guessedCardCode);
-  const opponents = prompt.cardCode === 'rebel'
-    ? getTargetableMatchPlayers({ includeSelf: true })
-    : getActiveMatchOpponents();
-  const isGuardPrompt = prompt.cardCode === 'guard';
-  const isScoutPrompt = prompt.cardCode === 'scout';
-  const isExecutionerPrompt = prompt.cardCode === 'executioner';
-  const isFeudalPrompt = prompt.cardCode === 'feudal_lord';
-  const availableGuesses = availableGuardGuessCards();
-  const title = isGuardPrompt ? t('guardPromptTitle') : isScoutPrompt ? t('scoutPromptTitle') : isExecutionerPrompt ? t('executionerPromptTitle') : isFeudalPrompt ? t('feudalPromptTitle') : t('rebelPromptTitle');
-  const hint = isGuardPrompt ? t('guardPromptHint') : isScoutPrompt ? t('scoutPromptHint') : isExecutionerPrompt ? t('executionerPromptHint') : isFeudalPrompt ? t('feudalPromptHint') : t('rebelPromptHint');
+  const {
+    titleKey,
+    hintKey,
+    summaryKey,
+    emptySummaryKey,
+    confirmKey,
+    confirmAction,
+    targetAction,
+    targets,
+    targetUserId,
+    secondTargetUserId,
+    selectedGuess,
+    guessedCardCode,
+    availableGuesses,
+    requiresGuess,
+    requiresSecondTarget,
+  } = promptModel;
 
   return `
     <div class="game-card-play-prompt-shell">
       <div class="game-card-play-prompt">
         <div class="game-card-play-prompt-head">
           <div>
-            <h3>${title}</h3>
-            <p>${hint}</p>
+            <h3>${t(titleKey)}</h3>
+            <p>${t(hintKey)}</p>
           </div>
           <button class="chip" data-act="closeGameCardPlayPrompt">${t('close')}</button>
         </div>
         <div class="game-card-play-prompt-section">
-          <span class="game-card-play-prompt-label">${isFeudalPrompt ? t('feudalPromptTargets') : t('guardPromptTarget')}</span>
+          <span class="game-card-play-prompt-label">${requiresSecondTarget ? t('feudalPromptTargets') : t('guardPromptTarget')}</span>
           <div class="game-card-play-prompt-grid">
-            ${opponents.map((player) => `
+            ${targets.map((player) => `
               <button
-                class="game-prompt-option ${prompt.targetUserId === player.userId || prompt.secondTargetUserId === player.userId ? 'selected' : ''}"
-                data-act="${isFeudalPrompt ? 'selectFeudalTarget' : 'selectGuardTarget'}"
+                class="game-prompt-option ${targetUserId === player.userId || secondTargetUserId === player.userId ? 'selected' : ''}"
+                data-act="${targetAction}"
                 data-user-id="${esc(player.userId)}"
               >
                 <strong>
                   ${esc(player.username || player.userId)}
                   ${player.userId === state.user?.id ? ` <em>${esc(t('youLabel'))}</em>` : ''}
                 </strong>
-                <span>${t('gameDiscardCount')}: ${esc(String((player.discard || []).length))}</span>
               </button>
             `).join('')}
           </div>
         </div>
-        ${isGuardPrompt ? `<div class="game-card-play-prompt-section">
+        ${requiresGuess ? `<div class="game-card-play-prompt-section">
           <span class="game-card-play-prompt-label">${t('guardPromptGuess')}</span>
           <div class="game-card-play-prompt-grid cards">
             ${availableGuesses.map((card) => `
               <button
-                class="game-prompt-option card ${prompt.guessedCardCode === card.code ? 'selected' : ''}"
+                class="game-prompt-option card ${guessedCardCode === card.code ? 'selected' : ''}"
                 data-act="selectGuardGuess"
                 data-card-code="${esc(card.code)}"
               >
@@ -507,21 +503,15 @@ const renderCardPlayPrompt = () => {
         </div>` : ''}
         <div class="game-card-play-prompt-footer">
           <div class="game-card-play-prompt-summary">
-            ${isGuardPrompt
-              ? (selectedGuess ? t('guardPromptSummary', { card: selectedGuess.name }) : t('guardPromptSummaryEmpty'))
-              : isScoutPrompt
-                ? t('scoutPromptSummary')
-                : isExecutionerPrompt
-                  ? t('executionerPromptSummary')
-                  : isFeudalPrompt
-                    ? t('feudalPromptSummary')
-                  : t('rebelPromptSummary')}
+            ${requiresGuess
+              ? (selectedGuess ? t(summaryKey, { card: selectedGuess.name }) : t(emptySummaryKey))
+              : t(summaryKey)}
           </div>
           <button
             class="primary"
-            data-act="${isGuardPrompt ? 'confirmGuardPlay' : isScoutPrompt ? 'confirmScoutPlay' : isExecutionerPrompt ? 'confirmExecutionerPlay' : isFeudalPrompt ? 'confirmFeudalPlay' : 'confirmRebelPlay'}"
-            ${(!prompt.targetUserId || (isGuardPrompt && !prompt.guessedCardCode) || (isFeudalPrompt && (!prompt.secondTargetUserId || prompt.secondTargetUserId === prompt.targetUserId))) ? 'disabled' : ''}
-          >${isGuardPrompt ? t('guardPromptConfirm') : isScoutPrompt ? t('scoutPromptConfirm') : isExecutionerPrompt ? t('executionerPromptConfirm') : isFeudalPrompt ? t('feudalPromptConfirm') : t('rebelPromptConfirm')}</button>
+            data-act="${confirmAction}"
+            ${(!targetUserId || (requiresGuess && !guessedCardCode) || (requiresSecondTarget && (!secondTargetUserId || secondTargetUserId === targetUserId))) ? 'disabled' : ''}
+          >${t(confirmKey)}</button>
         </div>
       </div>
     </div>
@@ -605,6 +595,39 @@ const renderPendingDecisionPrompt = () => {
     `;
   }
 
+  if (pendingDecision.type === 'suspicion_counter_guess') {
+    const counterGuessCards = getAvailableGuardGuessCards({ allowGuard: false });
+    const targetName = resolvePlayerName(pendingDecision.targetUserId);
+
+    return `
+      <div class="game-card-play-prompt-shell">
+        <div class="game-card-play-prompt">
+          <div class="game-card-play-prompt-head">
+            <div>
+              <h3>${t('suspicionCounterTitle')}</h3>
+              <p>${t('suspicionCounterHint', { target: targetName })}</p>
+            </div>
+          </div>
+          <div class="game-card-play-prompt-grid cards">
+            ${counterGuessCards.map((card) => `
+              <button
+                class="game-prompt-option card"
+                data-act="resolveSuspicionCounterGuess"
+                data-card-code="${esc(card.code)}"
+              >
+                <b>${esc(String(card.value))}</b>
+                <span>${esc(card.name)}</span>
+              </button>
+            `).join('')}
+          </div>
+          <div class="game-card-play-prompt-footer">
+            <div class="game-card-play-prompt-summary">${t('suspicionCounterSummary')}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   if (pendingDecision.type !== 'feudal_lord_swap') {
     return '';
   }
@@ -624,11 +647,21 @@ const renderPendingDecisionPrompt = () => {
         <div class="game-card-play-prompt-grid">
           <div class="game-prompt-option card reveal-card">
             <strong>${esc(firstTargetName)}</strong>
-            ${renderFaceUpCard(pendingDecision.targetCard, firstTargetName, 'showdown-card prompt-showdown-card')}
+            ${renderStaticFaceUpCard(
+              pendingDecision.targetCard,
+              'showdown-card prompt-showdown-card',
+              'showdown-card-value prompt-showdown-card-value',
+              'showdown-card-name prompt-showdown-card-name'
+            )}
           </div>
           <div class="game-prompt-option card reveal-card">
             <strong>${esc(secondTargetName)}</strong>
-            ${renderFaceUpCard(pendingDecision.secondTargetCard, secondTargetName, 'showdown-card prompt-showdown-card')}
+            ${renderStaticFaceUpCard(
+              pendingDecision.secondTargetCard,
+              'showdown-card prompt-showdown-card',
+              'showdown-card-value prompt-showdown-card-value',
+              'showdown-card-name prompt-showdown-card-name'
+            )}
           </div>
         </div>
         <div class="game-card-play-prompt-footer">

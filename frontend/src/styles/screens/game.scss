@@ -403,12 +403,12 @@
 }
 
 .game-card-play-prompt {
-  width: min(920px, calc(100vw - 28px));
+  width: min(760px, calc(100vw - 28px));
   max-height: calc(100vh - 32px);
   overflow: auto;
   border: 1px solid color-mix(in srgb, var(--outline) 70%, var(--line));
   border-radius: 18px;
-  padding: 18px;
+  padding: 16px;
   background: linear-gradient(180deg, rgba(10, 17, 37, .98), rgba(8, 14, 30, .96));
   box-shadow: 0 30px 80px rgba(0, 0, 0, .45);
 }
@@ -422,16 +422,16 @@
 
 .game-card-play-prompt-head h3 {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
 }
 
 .game-card-play-prompt-head p {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: var(--muted);
 }
 
 .game-card-play-prompt-section {
-  margin-top: 16px;
+  margin-top: 14px;
 }
 
 .game-card-play-prompt-label {
@@ -446,7 +446,7 @@
 .game-card-play-prompt-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .game-card-play-prompt-grid.cards {
@@ -457,11 +457,11 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
-  min-height: 74px;
+  gap: 4px;
+  min-height: 62px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 12px;
+  padding: 10px 12px;
   background: rgba(14, 22, 46, .82);
   color: var(--text);
   text-align: left;
@@ -493,24 +493,52 @@
 .game-prompt-option.reveal-card {
   align-items: stretch;
   text-align: left;
-  gap: 12px;
+  gap: 10px;
+  min-height: 0;
+  padding: 14px;
 }
 
 .game-prompt-option.reveal-card strong {
   font-size: 14px;
+  color: color-mix(in srgb, var(--text) 90%, var(--muted));
 }
 
 .prompt-showdown-card {
-  width: 100%;
+  width: 168px;
+  max-width: 100%;
   min-width: 0;
+  min-height: 112px;
+  padding: 12px;
+  border-radius: 14px;
+}
+
+.prompt-showdown-card.static-card {
+  cursor: default;
+}
+
+.prompt-showdown-card.static-card:hover {
+  transform: none;
+  box-shadow: 0 0 0 1px rgba(255, 219, 148, .14), 0 10px 22px rgba(0, 0, 0, .26);
+}
+
+.prompt-showdown-card-value {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.prompt-showdown-card-name {
+  font-size: 14px;
+  line-height: 1.25;
+  color: #f6dfbf;
 }
 
 .game-card-play-prompt-footer {
-  margin-top: 18px;
+  margin-top: 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .game-card-play-prompt-summary {
@@ -1037,6 +1065,14 @@
     display: grid;
     gap: 8px;
     align-content: start;
+  }
+
+  .game-card-play-prompt-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .game-prompt-option.reveal-card {
+    align-items: flex-start;
   }
 
   .game-revealed-rail {
