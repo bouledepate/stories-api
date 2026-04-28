@@ -9,6 +9,7 @@ use Stories\Domain\Matches\Decree\Guard\GuardSuspicionDecree;
 use Stories\Domain\Matches\Decree\Peasant\PeasantBestFriendDecree;
 use Stories\Domain\Matches\Decree\Peasant\PeasantDarkHorseDecree;
 use Stories\Domain\Matches\Decree\Peasant\PeasantFamilyTiesDecree;
+use Stories\Domain\Matches\Decree\Peasant\PeasantHideawayDecree;
 use Stories\Domain\Matches\Decree\Peasant\PeasantTwinDecree;
 use Stories\Shared\Error\ApiErrorCode;
 use Stories\Shared\Error\ApiException;
@@ -58,6 +59,7 @@ final class DecreeRegistry
             new PeasantDarkHorseDecree(),
             new PeasantFamilyTiesDecree(),
             new PeasantBestFriendDecree(),
+            new PeasantHideawayDecree(),
             new GuardFreeInterrogationDecree(),
             new GuardSuspicionDecree(),
         ];

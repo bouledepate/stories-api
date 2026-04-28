@@ -23,6 +23,10 @@ abstract class AbstractCharacterDecree
 
     abstract public function resolve(CardEffectContext $context): void;
 
+    public function afterCardPlay(CardEffectContext $context): void
+    {
+    }
+
     public function showdownHandValue(RoundPlayerState $state, int $baseValue): int
     {
         return $baseValue;
@@ -45,7 +49,7 @@ abstract class AbstractCharacterDecree
         return [];
     }
 
-    public function assertCanPlayCard(RoundPlayerState $actorState, Card $selectedCard): void
+    public function assertCanPlayCard(MatchState $match, RoundState $round, RoundPlayerState $actorState, Card $selectedCard): void
     {
     }
 

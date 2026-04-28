@@ -173,6 +173,25 @@ final class RoundState
         $player->addToHand($card);
     }
 
+    public function drawBottomFor(string $userId): void
+    {
+        if ($this->deck === []) {
+            return;
+        }
+
+        $player = $this->getPlayerState($userId);
+        if (count($player->hand) >= 2) {
+            return;
+        }
+
+        $card = array_pop($this->deck);
+        if (!$card instanceof Card) {
+            throw new ApiException(ApiErrorCode::MATCH_STATE_INVALID);
+        }
+
+        $player->addToHand($card);
+    }
+
     public function activePlayersCount(): int
     {
         $count = 0;

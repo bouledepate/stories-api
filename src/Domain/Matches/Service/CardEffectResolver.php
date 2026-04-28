@@ -28,24 +28,7 @@ final class CardEffectResolver
         Card $playedCard,
         RoundPlayerState $actorState,
     ): void {
-        $activeDecree = $match->activeDecreeForCard($playedCard->code, $round);
-        if ($activeDecree !== null) {
-            $this->decrees->require($activeDecree->code)->resolve(new CardEffectContext(
-                $match,
-                $round,
-                $play,
-                $playedCard,
-                $actorState,
-                $this->cards,
-                $this->decrees,
-                $this->eliminations,
-            ));
-
-            return;
-        }
-
-        $definition = $this->cards->require($playedCard->code);
-        $definition->resolve(new CardEffectContext(
+        $context = new CardEffectContext(
             $match,
             $round,
             $play,
@@ -54,6 +37,21 @@ final class CardEffectResolver
             $this->cards,
             $this->decrees,
             $this->eliminations,
-        ));
+        );
+
+        $activeDecree = $match->activeDecreeForCard($playedCard->code, $round);
+        if ($activeDecree !== null) {
+            $this->decrees->require($activeDecree->code)->resolve($context);
+        } else {
+            $definition = $this->cards->require($playedCard->code);
+            $definition->resolve($context);
+        }
+
+        foreach ($match->unsuppressedDecrees($round) as $decree) {
+            $this->decrees->require($decree->code)->afterCardPlay($context);
+            if ($round->hasPendingDecision()) {
+                break;
+            }
+        }
     }
 }

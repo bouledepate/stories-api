@@ -1090,6 +1090,124 @@ final class MatchLifecycleTest extends TestCase
         self::assertSame('queen', $updated->currentRound?->getPlayerState('u2')->peekFirstCardInHand()?->code);
     }
 
+    public function testPeasantHideawayForbidsRegularPeasantPlayOutsideBonusWindow(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+        $match = new MatchState(
+            id: 'match-peasant-hideaway-forbidden',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [new Card('queen', 'Королева', 8, 'queen-deck')],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('peasant', 'Крестьянин', 0, 'peasant-u1'),
+                        new Card('bishop', 'Епископ', 7, 'bishop-u1'),
+                    ], []),
+                    'u2' => new RoundPlayerState(false, [new Card('guard', 'Стражник', 1, 'guard-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'guard', 'Стражник', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+            activeDecrees: [
+                new ActiveDecree(
+                    'peasant_hideaway',
+                    'Тайник',
+                    'peasant',
+                    'В свой ход можете дополнительно сыграть эту карту, чтобы взять нижнюю карту из колоды.',
+                ),
+            ],
+        );
+
+        try {
+            $engine->playCard($match, new CardPlay('u1', 'peasant', cardInstanceId: 'peasant-u1'));
+            self::fail('Expected ApiException was not thrown');
+        } catch (ApiException $exception) {
+            self::assertSame(ApiErrorCode::CARD_PLAY_FORBIDDEN_BY_DECREE, $exception->errorCode);
+        }
+    }
+
+    public function testPeasantHideawayCreatesBonusPeasantPlayAndDrawsFromBottom(): void
+    {
+        $engine = $this->createEngine();
+        $now = gmdate(DATE_ATOM);
+        $match = new MatchState(
+            id: 'match-peasant-hideaway-bonus',
+            roomId: 'room-1',
+            ownerUserId: 'u1',
+            status: MatchStatus::ACTIVE,
+            players: [
+                new MatchPlayer('u1', 'owner', 0, 0),
+                new MatchPlayer('u2', 'player2', 0, 1),
+            ],
+            roundNumber: 1,
+            winnerUserId: null,
+            currentRound: new RoundState(
+                status: RoundStatus::ACTIVE,
+                activePlayerId: 'u1',
+                setAsideCard: new Card('set_aside', 'Отложенная', 0),
+                deck: [
+                    new Card('queen', 'Королева', 8, 'queen-top'),
+                    new Card('king', 'Король', 9, 'king-bottom'),
+                ],
+                revealedCards: [],
+                players: [
+                    'u1' => new RoundPlayerState(false, [
+                        new Card('bishop', 'Епископ', 7, 'bishop-u1'),
+                        new Card('peasant', 'Крестьянин', 0, 'peasant-u1'),
+                    ], []),
+                    'u2' => new RoundPlayerState(false, [new Card('guard', 'Стражник', 1, 'guard-u2')], []),
+                ],
+                lastAction: new RoundAction('card_played', 'u2', 'guard', 'Стражник', $now),
+                finishedReason: null,
+                roundWinners: [],
+            ),
+            lastRoundSummary: null,
+            createdAt: $now,
+            updatedAt: $now,
+            activeDecrees: [
+                new ActiveDecree(
+                    'peasant_hideaway',
+                    'Тайник',
+                    'peasant',
+                    'В свой ход можете дополнительно сыграть эту карту, чтобы взять нижнюю карту из колоды.',
+                ),
+            ],
+        );
+
+        $afterFirstPlay = $engine->playCard($match, new CardPlay('u1', 'bishop', cardInstanceId: 'bishop-u1'));
+
+        self::assertSame('u1', $afterFirstPlay->currentRound?->activePlayerId);
+        self::assertSame('peasant_hideaway_bonus', $afterFirstPlay->currentRound?->pendingDecision?->type);
+        self::assertSame('u1', $afterFirstPlay->currentRound?->pendingDecision?->actorUserId);
+
+        $afterBonusPlay = $engine->playCard($afterFirstPlay, new CardPlay('u1', 'peasant', cardInstanceId: 'peasant-u1', shouldReact: true));
+
+        self::assertSame('peasant_hideaway_draw', $afterBonusPlay->currentRound?->lastAction?->type);
+        self::assertNull($afterBonusPlay->currentRound?->pendingDecision);
+        self::assertSame('u2', $afterBonusPlay->currentRound?->activePlayerId);
+        self::assertCount(1, $afterBonusPlay->currentRound?->getPlayerState('u1')->hand ?? []);
+        self::assertSame('king', $afterBonusPlay->currentRound?->getPlayerState('u1')->hand[0]->code ?? null);
+        self::assertCount(2, $afterBonusPlay->currentRound?->getPlayerState('u1')->discard ?? []);
+        self::assertSame('queen', $afterBonusPlay->currentRound?->getPlayerState('u2')->hand[1]->code ?? null);
+    }
+
     public function testGuardGuessMissWithPeasantCanReactAndSurvive(): void
     {
         $engine = $this->createEngine();

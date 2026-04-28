@@ -58,6 +58,11 @@ final class TurnResolver
             return $pendingDecision->originActorUserId;
         }
 
+        if ($pendingDecision->type === 'peasant_hideaway_bonus') {
+            $this->resolvePeasantHideawayPendingDecision($round, $play, $pendingDecision);
+            return $pendingDecision->originActorUserId;
+        }
+
         if ($pendingDecision->type === 'queen_decree_suppression') {
             $this->resolveQueenDecreeSuppression($round, $play, $pendingDecision);
             return $pendingDecision->originActorUserId;
@@ -213,6 +218,33 @@ final class TurnResolver
         $round->clearPendingDecision();
     }
 
+    private function resolvePeasantHideawayPendingDecision(RoundState $round, CardPlay $play, \Stories\Domain\Matches\Model\PendingDecision $pendingDecision): void
+    {
+        if ($play->shouldReact === true) {
+            $playerState = $round->getPlayerState($play->actorUserId);
+            $playedCard = $playerState->removeCardFromHand('peasant', $play->cardInstanceId);
+            $playerState->addToDiscard($playedCard);
+            $round->drawBottomFor($play->actorUserId);
+            $round->lastAction = new RoundAction(
+                'peasant_hideaway_draw',
+                $play->actorUserId,
+                $pendingDecision->cardCode,
+                $pendingDecision->cardName,
+                gmdate(DATE_ATOM),
+            );
+        } else {
+            $round->lastAction = new RoundAction(
+                'peasant_hideaway_skipped',
+                $play->actorUserId,
+                $pendingDecision->cardCode,
+                $pendingDecision->cardName,
+                gmdate(DATE_ATOM),
+            );
+        }
+
+        $round->clearPendingDecision();
+    }
+
     public function advanceAfterAction(MatchState $match, RoundState $round, string $actorUserId): void
     {
         $nextPlayerId = $this->nextActivePlayerId($match, $round, $actorUserId);
@@ -260,7 +292,7 @@ final class TurnResolver
 
         if ($selectedCard !== null) {
             foreach ($match->unsuppressedDecrees($round) as $activeDecree) {
-                $this->decrees->require($activeDecree->code)->assertCanPlayCard($playerState, $selectedCard);
+                $this->decrees->require($activeDecree->code)->assertCanPlayCard($match, $round, $playerState, $selectedCard);
             }
         }
     }
@@ -354,4 +386,5 @@ final class TurnResolver
             gmdate(DATE_ATOM),
         );
     }
+
 }

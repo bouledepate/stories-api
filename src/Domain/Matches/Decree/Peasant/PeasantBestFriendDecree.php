@@ -53,7 +53,7 @@ final class PeasantBestFriendDecree extends AbstractCharacterDecree
         return [];
     }
 
-    public function assertCanPlayCard(RoundPlayerState $actorState, Card $selectedCard): void
+    public function assertCanPlayCard(\Stories\Domain\Matches\Model\MatchState $match, \Stories\Domain\Matches\Model\RoundState $round, RoundPlayerState $actorState, Card $selectedCard): void
     {
         if ($selectedCard->code === $this->cardCode()) {
             throw new ApiException(ApiErrorCode::CARD_PLAY_FORBIDDEN_BY_DECREE);

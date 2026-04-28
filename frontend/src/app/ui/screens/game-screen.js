@@ -163,6 +163,20 @@ const formatEventLine = (event) => {
       card: highlightCard('Крестьянин'),
     });
   }
+  if (event.type === 'peasant_hideaway_draw') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    return t('peasantHideawayDrawEvent', {
+      actor: highlightName(actorName),
+      card: highlightCard('Крестьянин'),
+    });
+  }
+  if (event.type === 'peasant_hideaway_skipped') {
+    const actorName = resolvePlayerName(event.actorUserId);
+    return t('peasantHideawaySkippedEvent', {
+      actor: highlightName(actorName),
+      card: highlightCard('Крестьянин'),
+    });
+  }
   if (event.type === 'scout_lock_applied') {
     const actorName = resolvePlayerName(event.actorUserId);
     const targetName = resolvePlayerName(event.targetUserId);
@@ -608,6 +622,28 @@ const renderPendingDecisionPrompt = () => {
             <div class="game-card-play-prompt-summary">${t('guardResolutionSummary')}</div>
             <div class="row">
               <button class="primary" data-act="resolveGuardMiss">${t('guardResolutionConfirm')}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (pendingDecision.type === 'peasant_hideaway_bonus') {
+    return `
+      <div class="game-card-play-prompt-shell">
+        <div class="game-card-play-prompt">
+          <div class="game-card-play-prompt-head">
+            <div>
+              <h3>${t('peasantHideawayTitle')}</h3>
+              <p>${t('peasantHideawayHint')}</p>
+            </div>
+          </div>
+          <div class="game-card-play-prompt-footer">
+            <div class="game-card-play-prompt-summary">${t('peasantHideawaySummary')}</div>
+            <div class="row">
+              <button class="secondary" data-act="skipPeasantHideaway">${t('peasantHideawaySkip')}</button>
+              <button class="primary" data-act="confirmPeasantHideaway">${t('peasantHideawayConfirm')}</button>
             </div>
           </div>
         </div>

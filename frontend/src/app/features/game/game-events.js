@@ -293,6 +293,14 @@ export const bindGameEvents = (render) => {
     await playMatchCard(render, 'peasant', { shouldReact: false });
   });
 
+  document.querySelector('[data-act="confirmPeasantHideaway"]')?.addEventListener('click', async () => {
+    await playMatchCard(render, 'peasant', { shouldReact: true });
+  });
+
+  document.querySelector('[data-act="skipPeasantHideaway"]')?.addEventListener('click', async () => {
+    await playMatchCard(render, 'peasant', { shouldReact: false });
+  });
+
   document.querySelector('[data-act="resolveGuardMiss"]')?.addEventListener('click', async () => {
     await playMatchCard(render, 'peasant', { shouldReact: false });
   });
